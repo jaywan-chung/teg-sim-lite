@@ -84,8 +84,8 @@ function getPiecewiseLinearFunc(dataRows) {
     const yVec = new Float64Array(numRows);
 
     for(let i=0; i<numRows; i++) {
-        xVec[i] = dataRows[i][0];
-        yVec[i] = dataRows[i][1];
+        xVec[i] = parseFloat(dataRows[i][0]);
+        yVec[i] = parseFloat(dataRows[i][1]);
     }
 
     const piecewiseLinearFunc = function(x) {
@@ -95,7 +95,7 @@ function getPiecewiseLinearFunc(dataRows) {
                 return yVec[i] + dydx*(x-xVec[i]);
             };
         };
-        return undefined;
+        return null;
     };
     return piecewiseLinearFunc;
 };
@@ -103,9 +103,11 @@ function getPiecewiseLinearFunc(dataRows) {
 function getChebyshevNodes(numNodes, x0, xf) {
     const nodesVec = new Float64Array(numNodes);
     const n = numNodes-1;
-    for(let i=0; i<numNodes; i++) {
+    for(let i=1; i<numNodes-1; i++) {
         nodesVec[i] = ((x0-xf)*Math.cos(i*Math.PI/n) + (x0+xf))/2;
     };
+    nodesVec[0] = x0;
+    nodesVec[numNodes-1] = xf;
     return nodesVec;
 };
 
@@ -170,7 +172,7 @@ function getMinAndMaxXValue(dataRows) {
     var maxXValue = -Infinity;
     var xValue;
     for(let row of dataRows) {
-        xValue = row[0]
+        xValue = parseFloat(row[0]);
         if(minXValue >= xValue) {
             minXValue = xValue;
         };
@@ -179,6 +181,19 @@ function getMinAndMaxXValue(dataRows) {
         };
     };
     return [minXValue, maxXValue];
+};
+
+function getMinAndMaxYValue(x0, xf, yFunc, numMesh) {
+    const xVec = getLinearSpace(x0, xf, numMesh);
+    var minYValue = Infinity;
+    var maxYValue = -Infinity;
+    var yValue;
+    for(x of xVec) {
+        yValue = yFunc(x);
+        if(minYValue >= yValue) { minYValue = yValue; }
+        if(maxYValue <= yValue) { maxYValue = yValue; }
+    };
+    return [minYValue, maxYValue];
 };
 
 function getPolyRegressFunc(degPoly, dataRows, costScale=1.0) {

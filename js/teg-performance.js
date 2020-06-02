@@ -214,22 +214,22 @@ function computeTepFormula() {
         return new Promise(function(resolve, reject) {
             simWindow.isTepFuncUpdated = updateTepFuncs();
             console.log("Compute chart ok.");
+            resolve();
+            });
+    })
+    .then(function() {
+        window.setTimeout(function() {
+            $("#chart-message").hide();
+            $("#compute-formula").show();
 
-            window.setTimeout(function() {
-                $("#chart-message").hide();
-                $("#compute-formula").show();
-
-                if(simWindow.isTepFuncUpdated) {
-                    // draw charts
-                    $("#tep-chart-container").show();
-                    drawTepCharts();
-                    console.log("Draw chart ok.");
-                };
-                resolve();
-            });    
+            if(simWindow.isTepFuncUpdated) {
+                // draw charts
+                $("#tep-chart-container").show();
+                drawTepCharts();
+                console.log("Draw chart ok.");
+            };
         });
     });
-    return promise;
 };
 
 function animateSimTaskMessageColor(isAnimateColor=true) {
@@ -388,6 +388,9 @@ function changeSolverOptionForms() {
 };
 
 function updateTepFuncs() {
+    simParam.minTemp = -Infinity;
+    simParam.maxTemp = Infinity;
+
     if(!updateSingleTepFunc("funcSeebeck", simWindow.tableSeebeck, "seebeck", "seebeck")) {
         window.alert("Analytic formula for Seebeck coefficient cannot be found!");
         return false;
@@ -402,6 +405,8 @@ function updateTepFuncs() {
     }
     return true;
 };
+
+// [dataRows, minXValue, maxXValue] = getDataRows(simWindow.tableElecResi.getData(), "temperature", "elecResi");
 
 function updateSingleTepFunc(tepFuncName, table, yField, tepName, costScale=1.0) {
     const tableData = table.getData();
@@ -441,6 +446,8 @@ function updateSingleTepFunc(tepFuncName, table, yField, tepName, costScale=1.0)
 };
 
 function getTepFunc(dataRows, selectTepMethodId, selectTepMethodSuboptionId, costScale=1.0) {
+    var func = getPiecewiseLinearFunc(dataRows);
+    console.log("piecewiseLinear val=", func(320));
     const selectTepMethodVal = $(selectTepMethodId).val();
     if(selectTepMethodVal == "polynomial-regression") {
         const degPoly = Number($(selectTepMethodSuboptionId).val());
@@ -491,6 +498,13 @@ function drawSeebeckChart() {
     const yScale = 1e6;  // [μV/K]
 
     const data = getChartData(table, xField, yField, xLabel, yTableLabel, yScale);
+    const [, minXValue, maxXValue] = getDataRows(table.getData(), xField, yField);
+    var [minYValue, maxYValue] = getMinAndMaxYValue(minXValue, maxXValue, simParam.funcSeebeck, simWindow.numMinMeshPoints);
+    console.log(minXValue, maxXValue, minYValue, maxYValue);
+    const dY = Math.max(Math.abs(minYValue), Math.abs(maxYValue))*0.01;
+    minYValue = (minYValue-dY)*yScale;
+    maxYValue = (maxYValue+dY)*yScale;
+    console.log(minXValue, maxXValue, minYValue, maxYValue);
 
     var view = new google.visualization.DataView(data);
     view.setColumns([0, 1, {
@@ -513,7 +527,10 @@ function drawSeebeckChart() {
       title: yLabel,
       titleTextStyle: {bold: true, fontSize: 20,},
       hAxis: {title: xLabel, titleTextStyle: {italic: false, fontSize: 15, color: '#333'},},
-      vAxis: {title: yLabel, titleTextStyle: {italic: false, fontSize: 15,},},
+      vAxis: {
+          title: yLabel, titleTextStyle: {italic: false, fontSize: 15,},
+          viewWindow: {min: minYValue, max: maxYValue,},
+        },
       legend: { position: 'bottom', alignment: 'center' },
       colors: [simWindow.colorRawData, simWindow.colorFormula],
       height: simWindow.chartHeight,
@@ -692,10 +709,10 @@ function getDataRows(tableData, xField, yField, yScale=1.0) {
     var maxXValue = -Infinity;
 
     for(let row of tableData) {
-        xData = row[xField];
-        if(!isNaN(xData) && xData !== "" && xData !== null) {  // handle only when xValue is adequate
-            xValue = Number(row[xField]);
-            yValue = Number(row[yField]);
+        xData = String(row[xField]).trim();
+        if(!isNaN(xData) && xData !== "" && xData !== "null") {  // handle only when xValue is adequate
+            xValue = parseFloat(row[xField]);
+            yValue = parseFloat(row[yField]);
             dataRows.push([xValue, yValue*yScale]);
             // track min and max values
             if(minXValue > xValue) {

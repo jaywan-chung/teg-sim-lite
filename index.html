@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="shortcut icon" href="images/favicon.ico" type="icon">
+    <link href="https://fonts.googleapis.com/css?family=Poppins" rel="stylesheet">
+    <link href="lib/css/tabulator.min.css" rel="stylesheet">
+    <link href="css/teg-performance.css" rel="stylesheet">
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.12.4/jquery.js"></script>
+    <script type="text/javascript" src="lib/js/tabulator.min.js"></script>
+    <script type="text/javascript" src="lib/js/minimizer-async.js"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script src="js/numerical.js"></script>
+    <script src="js/teg-performance.js"></script>
+    <title>TEG Simulator</title>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <a href="teg-performance.html" class="logo">
+                <img src="images/te-blue.svg">
+            </a>
+            <nav class="nav-bar">
+                <ul>
+                    <li><a href="about.html" target="_blank">About</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <section class="title">
+        <div class="container">
+            <h1>Thermoelectric Power Generation<br/>Web Simulator Lite ver.0.5</h1>
+        </div>
+    </section>
+
+    <section class="section input-tep">
+        <h2 class="subtitle">Step 1: Input Thermoelectric Properties</h2>
+        <p class="paragraph">
+            You can directly edit the table or paste (Ctrl+V) spreadsheet (excel) data into the table.
+            Click the target table when you paste something.
+            Be careful as pasting will replace the entire table.
+        </p>
+        <div class="container">
+            <article class="table">
+                <h3 class="table-title">Seebeck coefficient</h3>
+                <div id="tep-table-seebeck"></div>
+                <div class="button-container">
+                    <button type="button" id="add-row-tep-table-seebeck">Add Row</button>
+                    <button type="button" id="delete-row-tep-table-seebeck">Delete Row</button>
+                    <button type="button" id="clear-tep-table-seebeck">Clear</button>
+                </div>
+            </article>
+            <article class="table">
+                <h3 class="table-title">Electrical resistivity</h3>
+                <div id="tep-table-elec-resi" class="table"></div>
+                <div class="button-container">
+                    <button type="button" id="add-row-tep-table-elec-resi">Add Row</button>
+                    <button type="button" id="delete-row-tep-table-elec-resi">Delete Row</button>
+                    <button type="button" id="clear-tep-table-elec-resi">Clear</button>
+                </div>
+            </article>
+            <article class="table">
+                <h3 class="table-title">Thermal conductivity</h3>
+                <div id="tep-table-thrm-cond" class="table"></div>
+                <div class="button-container">
+                    <button type="button" id="add-row-tep-table-thrm-cond">Add Row</button>
+                    <button type="button" id="delete-row-tep-table-thrm-cond">Delete Row</button>
+                    <button type="button" id="clear-tep-table-thrm-cond">Clear</button>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    <section class="section tep-curve">
+        <h2 class="subtitle">Step 2: Determine Analytic Formulae for Thermoelectric Properties</h2>
+        <p class="paragraph">
+            Select regression or interpolation method to find mathematical formulae for the thermoelectric properties.
+            If you are not sure, use the default option (polynomial interpolation at 11 Chebyshev nodes).
+        </p>
+        <div class="container">
+            <article class="option-group">
+                <h3 class="option-group-title">Seebeck coefficient</h3>
+                <form>
+                    <label for="select-seebeck-method">Select Method:</label>
+                    <select id="select-seebeck-method"></select>
+                </form>
+                <form>
+                    <label id="label-seebeck-suboption" for="select-seebeck-suboption"></label>
+                    <select id="select-seebeck-suboption"></select>
+                </form>
+            </article>
+            <article class="option-group">
+                <h3 class="option-group-title">Electrical resistivity</h3>
+                <form>
+                    <label for="select-elec-resi-method">Select Method:</label>
+                    <select id="select-elec-resi-method"></select>
+                </form>
+                <form>
+                    <label id="label-elec-resi-suboption" for="select-elec-resi-suboption"></label>
+                    <select id="select-elec-resi-suboption"></select>
+                </form>
+            </article>
+            <article class="option-group">
+                <h3 class="option-group-title">Thermal conductivity</h3>
+                <form>
+                    <label for="select-thrm-cond-method">Select Method:</label>
+                    <select id="select-thrm-cond-method"></select>
+                </form>
+                <form>
+                    <label id="label-thrm-cond-suboption" for="select-thrm-cond-suboption"></label>
+                    <select id="select-thrm-cond-suboption"></select>
+                </form>
+            </article>
+        </div>
+        <div class="button-container">
+            <button type="button" class="selection-button" id="compute-formula">Compute Formula</button>
+        </div>
+        <div class="message-container" id="chart-message">
+        </div>
+        <div class="chart-container" id="tep-chart-container">
+            <article class="chart">
+                <div id="chart-seebeck"></div>
+            </article>
+            <article class="chart">
+                <div id="chart-elec-resi"></div>
+            </article>
+            <article class="chart">
+                <div id="chart-thrm-cond"></div>
+            </article>
+            <article class="chart">
+                <div id="chart-elec-cond"></div>
+            </article>
+            <article class="chart">
+                <div id="chart-power-factor"></div>
+            </article>
+            <article class="chart">
+                <div id="chart-figure-of-merit"></div>
+            </article>
+        </div>
+    </section>
+
+    <section class="section select-sim-param">
+        <h2 class="subtitle">Step 3: Select Simulation Parameters</h2>
+        <p class="paragraph">
+            Select module specifications, operating conditions, and numerical solver options.
+        </p>
+        <div class="container">
+            <article class="option-group">
+                <h3 class="option-group-title">Module spec.</h3>
+                <form>
+                    <label class="simul-param-label" for="input-module-length">Length of legs:</label>
+                    <input class="simul-param-input" type="text" id="input-module-length">
+                    <label class="simul-param-unit-label">[mm]</label>
+                </form>
+                <form>
+                    <label class="simul-param-label" for="input-module-area">Area of legs:</label>
+                    <input class="simul-param-input" type="text" id="input-module-area">
+                    <label class="simul-param-unit-label">[mm<sup>2</sup>]</label>
+                </form>
+                <form>
+                    <label class="simul-param-label" for="input-num-of-legs">No. of legs:</label>
+                    <input class="simul-param-input" type="text" id="input-num-of-legs">
+                    <label class="simul-param-unit-label">[1]</label>
+                </form>
+            </article>
+            <article class="option-group">
+                <h3 class="option-group-title">Operating conditions</h3>
+                <form>
+                    <label class="simul-param-label" for="input-cold-side-temp">Cold-side temp.:</label>
+                    <input class="simul-param-input" type="text" id="input-cold-side-temp">
+                    <label class="simul-param-unit-label">[K]</label>
+                </form>
+                <form>
+                    <label class="simul-param-label" for="input-hot-side-temp">Hot-side temp.:</label>
+                    <input class="simul-param-input" type="text" id="input-hot-side-temp">
+                    <label class="simul-param-unit-label">[K]</label>
+                </form>
+                <form>
+                    <label>Ref. current range (0~1):</label>
+                    <div style="margin-left: 86px;">
+                        <input class="simul-param-input"  type="text" id="input-initial-current">
+                        <label >~</label>
+                        <input class="simul-param-input"  type="text" id="input-final-current">
+                        <label class="simul-param-unit-label">[1]</label>    
+                    </div>
+                </form>
+            </article>
+            <article class="option-group">
+                <h3 class="option-group-title">Solver options</h3>
+                <form>
+                    <label for="select-nonlinear-solver">Nonlinear solver:</label>
+                    <select id="select-nonlinear-solver"></select>
+                </form>
+                <form>
+                    <label for="select-num-of-mesh-points">No. of mesh points:</label>
+                    <select id="select-num-of-mesh-points"></select>
+                </form>
+                <form>
+                    <label for="select-max-num-of-iteration">Max. no. of iteration:</label>
+                    <select id="select-max-num-of-iteration"></select>
+                </form>
+                <form>
+                    <label for="select-solver-tol">Solver Tolerance:</label>
+                    <select id="select-solver-tol"></select>
+                </form>
+                <form>
+                    <label for="select-num-of-current-mesh-points">No. of Ref. current points:</label>
+                    <select id="select-num-of-current-mesh-points"></select>
+                </form>
+            </article>
+        </div>
+        <div class="button-container">
+            <button type="button" class="selection-button" id="run-sim-button">Run Simulation</button>
+        </div>
+    </section>
+
+    <section class="section sim-result">
+        <h2 class="subtitle">Finally: Check out the Simulation Results</h2>
+        <p class="paragraph">
+            Select module specifications, operating conditions, and numerical solver options.
+        </p>
+        <div class="message-container" id="sim-task-message">
+        </div>
+        <div class="chart-container" id="sim-result-chart-container">
+            <article class="chart">
+                <div id="current-vs-power-chart"></div>
+            </article>
+            <article class="chart">
+                <div id="current-vs-efficiency-chart"></div>
+            </article>
+        </div>
+    </section>
+
+    <section class="section test" id="test-section">
+        <div class="button-container">
+            <button type="button" class="selection-button" id="test-run">Test Run</button>
+        </div>
+        <div class="chart-container" id="test-chart-container">
+            <article class="chart">
+                <div id="chart-test"></div>
+            </article>
+        </div>
+    </section>
+    
+    <footer class="footer">
+        <div class="container">
+            <section class="footer-keri-info">
+                <div class="left-col">
+                    <a href="https://www.keri.re.kr/html/en/" target="_blank">
+                        <img src="images/KERI-logo-with-eng.png">
+                    </a>
+                </div>
+                <div class="right-col">
+                    <p>Energy Conversion Research Center, Korea Electrotechnology Research Institute (KERI)</p>
+                    <address>12, Bulmosan-ro 10beon-gil, Seongsan-gu, Changwon-si, Gyeongsangnam-do, 51543 South Korea</address>
+                    <p>Copyright &copy; 2019-2020 KERI. All rights reserved.</p>
+                </div>
+            </section>
+        </div>
+    </footer>
+
+</body>
+</html>

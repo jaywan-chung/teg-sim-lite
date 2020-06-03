@@ -19,7 +19,7 @@
 <body>
     <header class="header">
         <div class="container">
-            <a href="teg-performance.html" class="logo">
+            <a href="index.html" class="logo">
                 <img src="images/te-blue.svg">
             </a>
             <nav class="nav-bar">
@@ -32,11 +32,14 @@
 
     <section class="title">
         <div class="container">
-            <h1>Thermoelectric Power Generation<br/>Web Simulator Lite ver.0.5</h1>
+            <h1>Thermoelectric Power Generation<br/>Web Simulator Lite ver.0.51a</h1>
         </div>
     </section>
 
     <section class="section input-tep">
+        <p class="paragraph">
+            *This website is tested by the Chrome web browser ver.83.0.4103.61. Other web browsers may not show the pages as intended.
+        </p>
         <h2 class="subtitle">Step 1: Input Thermoelectric Properties</h2>
         <p class="paragraph">
             You can directly edit the table or paste (Ctrl+V) spreadsheet (excel) data into the table.
@@ -142,7 +145,7 @@
         </div>
     </section>
 
-    <section class="section select-sim-param">
+    <section class="section select-sim-param" id="section-select-sim-param">
         <h2 class="subtitle">Step 3: Select Simulation Parameters</h2>
         <p class="paragraph">
             Select module specifications, operating conditions, and numerical solver options.
@@ -179,10 +182,10 @@
                     <label class="simul-param-unit-label">[K]</label>
                 </form>
                 <form>
-                    <label>Ref. current range (0~1):</label>
+                    <label>Current range (I/I<sub>Ref</sub>=0-1):</label>
                     <div style="margin-left: 86px;">
                         <input class="simul-param-input"  type="text" id="input-initial-current">
-                        <label >~</label>
+                        <label > to </label>
                         <input class="simul-param-input"  type="text" id="input-final-current">
                         <label class="simul-param-unit-label">[1]</label>    
                     </div>
@@ -195,7 +198,7 @@
                     <select id="select-nonlinear-solver"></select>
                 </form>
                 <form>
-                    <label for="select-num-of-mesh-points">No. of mesh points:</label>
+                    <label for="select-num-of-mesh-points">No. of temp. mesh points:</label>
                     <select id="select-num-of-mesh-points"></select>
                 </form>
                 <form>
@@ -207,7 +210,7 @@
                     <select id="select-solver-tol"></select>
                 </form>
                 <form>
-                    <label for="select-num-of-current-mesh-points">No. of Ref. current points:</label>
+                    <label for="select-num-of-current-mesh-points">No. of current points:</label>
                     <select id="select-num-of-current-mesh-points"></select>
                 </form>
             </article>
@@ -217,10 +220,10 @@
         </div>
     </section>
 
-    <section class="section sim-result">
+    <section class="section sim-result" id="section-sim-result">
         <h2 class="subtitle">Finally: Check out the Simulation Results</h2>
         <p class="paragraph">
-            Select module specifications, operating conditions, and numerical solver options.
+            Let us check out!
         </p>
         <div class="message-container" id="sim-task-message">
         </div>
@@ -231,6 +234,9 @@
             <article class="chart">
                 <div id="current-vs-efficiency-chart"></div>
             </article>
+        </div>
+        <div class="container">
+            <ul id="report-list"></ul>
         </div>
     </section>
 

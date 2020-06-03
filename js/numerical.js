@@ -4,6 +4,7 @@
  * 2020 Jaywan Chung
  *
 **/
+'use strict';
 
 function clipByValue(vec, minValue, maxValue) {
     return vec.map(function(element) {
@@ -188,7 +189,7 @@ function getMinAndMaxYValue(x0, xf, yFunc, numMesh) {
     var minYValue = Infinity;
     var maxYValue = -Infinity;
     var yValue;
-    for(x of xVec) {
+    for(let x of xVec) {
         yValue = yFunc(x);
         if(minYValue >= yValue) { minYValue = yValue; }
         if(maxYValue <= yValue) { maxYValue = yValue; }
@@ -270,7 +271,7 @@ function evalL2SumOfDataRows(dataRows) {
 function _adaptiveSimpsonMem(f, a, fa, b, fb) {
     var m = (a + b) / 2;
     var fm = f(m);
-    // return [m, fm, Math.abs(b - a) / 6 * (fa + 4 * fm + fb)];
+
     return [m, fm, (b - a) / 6 * (fa + 4 * fm + fb)];
 };
 
@@ -297,17 +298,13 @@ function _adaptiveSimpson(f, a, fa, b, fb, eps, whole, m, fm, depth, maxDepth) {
 
     [lm, flm, left]  = _adaptiveSimpsonMem(f, a, fa, m, fm);
     [rm, frm, right] = _adaptiveSimpsonMem(f, m, fm, b, fb);
-    // console.log(`left=${left}, right=${right}, whole=${whole}`);
     delta = left + right - whole
     if(depth >= maxDepth) {
-        // console.log("Max. depth of adaptive Simpson reached.")
         return left + right + delta / 15;
     };
     if(Math.abs(delta) <= 15 * eps) {
         return left + right + delta / 15;
     };
-
-    // console.log(`_adaptiveSimpson(a=${a}, b=${b}), delta=${delta}, 15*eps=${15*eps} depth=${depth}`);
 
     return _adaptiveSimpson(f, a, fa, m, fm, eps/2, left , lm, flm, depth+1, maxDepth) 
            + _adaptiveSimpson(f, m, fm, b, fb, eps/2, right, rm, frm, depth+1, maxDepth);
@@ -330,8 +327,6 @@ function adaptiveSimpson(f, a, b, eps=1e-10, maxDepth=20) {
     fa = f(a);
     fb = f(b);
     [m, fm, whole] = _adaptiveSimpsonMem(f, a, fa, b, fb);
-
-    // console.log("adaptive Simpson complete.");
 
     return _adaptiveSimpson(f, a, fa, b, fb, eps, whole, m, fm, depth, maxDepth);
 };

@@ -4,16 +4,16 @@
  * 2020 Jaywan Chung
  *
 **/
+'use strict';
 
 const simWindow = {
     isTepFuncUpdated: false,
+    isSimResultDrawn: false,
     chartHeight: 500,
     colorRawData: '#1976D2', // '#1E88E5', //'#1565C0',
     colorFormula: '#D32F2F',
     animateColorIndex: 0,
-    // animateColors: ['#FF0000', '#DC143C', '#FF4500', '#FF6347', '#FF7F50',],
     animateColors: ['#922B21', '#8B0000', '#76448A', '#1F618D', '#148F77', '#1E8449', '#B7950B', '#AF601A',],
-    //animateColors: ['#922B21',],
     numMinMeshPoints: 101,  // how many points we draw in a chart; should be larger than 2
     tableSeebeck: null,
     tableElecResi: null,
@@ -35,14 +35,15 @@ const simWindow = {
     // testName: 'testThomsonTerm',  // need 31 nodes
     // testName: 'testPerformance',
     // testName: 'testPowellMethod',  // a case that Picard iteration does not work.
-    // testName: 'testPromise',  // to practice Promise async.
 };
 const simParam = {
-    // solverName: 'picard-iteration',
-    solverName: 'powell-method',
+    solverName: 'picard-iteration',
+    // solverName: 'powell-method',
     funcSeebeck: null,
     funcElecResi: null,
-    funcThrmCond: null, 
+    funcThrmCond: null,
+    funcPower: null,
+    funcHotSideHeatRate: null,
     minTemp: -Infinity,
     maxTemp: Infinity,
     length: null,
@@ -80,13 +81,13 @@ const dimlessSimParam = {
     ZdeltaT: null,
     initialCurrent: null,
     finalCurrent: null,
+    refCurrentVec: null,
     numMeshPoints: null,
-    // numSolChebyshevNodes: 31,
     numSolChebyshevNodes: 11,
     numCurrentChebyshevNodes: null,
     integralEps: 1e-8,  // for adaptive Simpson method
-    maxIntegralDepth: 9,  // for adaptive Simpson method
-    numMaxIteration: 100,
+    maxIntegralDepth: 15,  // for adaptive Simpson method
+    numMaxIteration: null,
     solverTol: 1e-7,
 };
 
@@ -99,6 +100,9 @@ $(function(){
         if(simWindow.isTepFuncUpdated) {
             drawTepCharts();
         };
+        if(simWindow.isSimResultDrawn) {
+            drawSimResults();
+        }
     });
 
     // Hide buttons for empty charts
@@ -111,6 +115,9 @@ $(function(){
     initTepFormulaMethodForms();
     // Initialize the forms for simulation parameters
     initSimParamForms();
+    // Hide Step 3 and Final Step
+    $("#section-select-sim-param").hide();
+    $("#section-sim-result").hide();
 
     if(simWindow.isTestMode) {
         setTestInterpolationOption();
@@ -141,21 +148,34 @@ function activateRunSimButton() {
                 updateSolverParamsFromForms();
                 updateSimParamsFromForms();
                 updateDimlessSimParams();
-                console.log("Update Solver Params ok.");
+                const isValidSimParams = checkValidityOfSimParams();
+                if(!isValidSimParams) {
+                    reject();
+                }
                 resolve();
             })
             .then(function() {
                 return new Promise(function(resolve, reject) {
                     window.setTimeout(async function() {
+                        console.log("Update Solver Params ok.");
+                        // show the result section and run the simulation.
+                        $("#section-sim-result").show();
                         await runSimulation();
                         resolve();
                     });
+                });
+            }, function() {
+                return new Promise(function(resolve, reject) {
+                    reject();
                 });
             })
             .then(function() {
                 window.setTimeout(() => {
                     console.log("Simulation complete.");
                 });
+            }, function() {
+                console.log("Simulation aborted.")
+                return;
             });
         }
         else {
@@ -202,6 +222,24 @@ function activateComputeFormulaButton() {
     });
 };
 
+function checkValidityOfSimParams() {
+    console.log()
+    if(simParam.coldTemp < simParam.minTemp) {
+        window.alert("Cold-side temp. is too low: the TEPs are unknown.");
+        return false;
+    }
+    if(simParam.hotTemp > simParam.maxTemp ) {
+        window.alert("Hot-side temp. is too high: the TEPs are unknown.");
+        return false;
+    }
+    if(simParam.coldTemp > simParam.hotTemp) {
+        window.alert("Hot-side temp. should be larger than cold-side temp.");        
+        return false;
+        
+    }
+    return true;
+};
+
 function computeTepFormula() {
     var promise = new Promise(function(resolve, reject) {
         // do regression or interpolation of TEPs
@@ -223,6 +261,13 @@ function computeTepFormula() {
             $("#compute-formula").show();
 
             if(simWindow.isTepFuncUpdated) {
+                // we can go on the next step
+                $("#section-select-sim-param").show();
+
+                // set cold-side temp and hot-side temp
+                $("#input-cold-side-temp").val(String(simParam.minTemp));
+                $("#input-hot-side-temp").val(String(simParam.maxTemp));
+
                 // draw charts
                 $("#tep-chart-container").show();
                 drawTepCharts();
@@ -406,8 +451,6 @@ function updateTepFuncs() {
     return true;
 };
 
-// [dataRows, minXValue, maxXValue] = getDataRows(simWindow.tableElecResi.getData(), "temperature", "elecResi");
-
 function updateSingleTepFunc(tepFuncName, table, yField, tepName, costScale=1.0) {
     const tableData = table.getData();
     const xField = "temperature";
@@ -435,8 +478,8 @@ function updateSingleTepFunc(tepFuncName, table, yField, tepName, costScale=1.0)
         return true;
     };
 
-    // for real
-    func = getTepFunc(dataRows, selectTepMethodId, selectTepMethodSuboptionId);
+    // do the work!
+    const func = getTepFunc(dataRows, selectTepMethodId, selectTepMethodSuboptionId);
     if(func) {
         simParam[tepFuncName] = func;
         return true;
@@ -446,23 +489,42 @@ function updateSingleTepFunc(tepFuncName, table, yField, tepName, costScale=1.0)
 };
 
 function getTepFunc(dataRows, selectTepMethodId, selectTepMethodSuboptionId, costScale=1.0) {
-    var func = getPiecewiseLinearFunc(dataRows);
-    console.log("piecewiseLinear val=", func(320));
     const selectTepMethodVal = $(selectTepMethodId).val();
+    var tepFunc = null;
+    const [minTemp, maxTemp] = getMinAndMaxXValue(dataRows);
+
     if(selectTepMethodVal == "polynomial-regression") {
         const degPoly = Number($(selectTepMethodSuboptionId).val());
-        //console.log(`deg of ${selectTepMethodId} is ${degPoly}`);
         if(dataRows.length >= 2) {
-            return getPolyRegressFunc(degPoly, dataRows, costScale);
+            tepFunc = getPolyRegressFunc(degPoly, dataRows, costScale);
         };
     }
     else if(selectTepMethodVal == "polynomial-interpolation") {
         const numNodes = Number($(selectTepMethodSuboptionId).val());
         if(dataRows.length >= 2) {
-            return getPolyChebyshevFuncFromDataRows(numNodes, dataRows);
+            tepFunc = getPolyChebyshevFuncFromDataRows(numNodes, dataRows);
+        };
+    }
+    else if(selectTepMethodVal == "other-methods") {
+        const subOption = $(selectTepMethodSuboptionId).val();
+        if(subOption == "piecewise-linear-interpolation") {
+            tepFunc = getPiecewiseLinearFunc(dataRows);
         };
     };
-    return undefined;
+
+    if(tepFunc !== null) {
+        // for positivity and safety, handle out-of-bound values
+        return function(temp) {
+            if(temp<minTemp) {
+                return tepFunc(minTemp);
+            }
+            if(temp>maxTemp) {
+                return tepFunc(maxTemp);
+            }
+            return tepFunc(temp);
+        }
+    };
+    return null;
 };
 
 function setChartContainerStyle() {
@@ -500,11 +562,9 @@ function drawSeebeckChart() {
     const data = getChartData(table, xField, yField, xLabel, yTableLabel, yScale);
     const [, minXValue, maxXValue] = getDataRows(table.getData(), xField, yField);
     var [minYValue, maxYValue] = getMinAndMaxYValue(minXValue, maxXValue, simParam.funcSeebeck, simWindow.numMinMeshPoints);
-    console.log(minXValue, maxXValue, minYValue, maxYValue);
     const dY = Math.max(Math.abs(minYValue), Math.abs(maxYValue))*0.01;
     minYValue = (minYValue-dY)*yScale;
     maxYValue = (maxYValue+dY)*yScale;
-    console.log(minXValue, maxXValue, minYValue, maxYValue);
 
     var view = new google.visualization.DataView(data);
     view.setColumns([0, 1, {
@@ -703,7 +763,7 @@ function drawFigureOfMeritChart() {
 };
 
 function getDataRows(tableData, xField, yField, yScale=1.0) {
-    var xData;
+    var xData, xValue, yValue;
     var dataRows = [];
     var minXValue = Infinity;
     var maxXValue = -Infinity;
@@ -788,9 +848,8 @@ function initTepFormulaMethodForm(tepName) {
     $(selectTepMethodId).html(
         `<option value="polynomial-regression">Polynomial Regression</option>
          <option value="polynomial-interpolation">Polynomial Interpolation</option>
-         <option value="other-regression">Other Regression</option>`);
+         <option value="other-methods">Other Methods</option>`);
     $(selectTepMethodId).val("polynomial-interpolation")  // initial selection
-    //$(selectTepMethodId).val("polynomial-regression")  // initial selection
     changeTepFormulaSuboptionForm(tepName);
     $(selectTepMethodId).change(function() {
         changeTepFormulaSuboptionForm(tepName);
@@ -832,14 +891,14 @@ function changeTepFormulaSuboptionForm(tepName) {
         );
         $(selectTepMethodSuboptionId).val("11");  // change initial choice
     }
-    else if ($(`${selectTepMethodId} option:selected`).val() == "other-regression") {
-        $(labelTepMethodSuboptionId).html("Select Regression Method:");
+    else if ($(`${selectTepMethodId} option:selected`).val() == "other-methods") {
+        $(labelTepMethodSuboptionId).html("Select Method:");
         $(selectTepMethodSuboptionId).html(
             `
-            <option value="na">Not Available</option>
+            <option value="piecewise-linear-interpolation">Piecewise Linear Interpolation</option>
             `
         );
-        $(selectTepMethodSuboptionId).val("na");  // change initial choice
+        $(selectTepMethodSuboptionId).val("piecewise-linear-interpolation");  // change initial choice
     };
 };
 
@@ -853,6 +912,7 @@ function getSelectTepMethodSuboptionId(tepName) {
 
 function initTepTables() {
     var tabledataSeebeck, tableElecResi, tableThrmCond;
+    var tabledataSeebeck, tabledataElecResi, tabledataThrmCond;
     //define some sample data
     if(simWindow.isTestMode) {
         if(simWindow.testName == 'testDiffusionTerm') {
@@ -871,9 +931,6 @@ function initTepTables() {
             [tabledataSeebeck, tabledataElecResi, tabledataThrmCond] = getTestPerformanceTabledata();
         }
         else if(simWindow.testName == 'testPowellMethod') {
-            [tabledataSeebeck, tabledataElecResi, tabledataThrmCond] = getTestPowellMethodTabledata();
-        }
-        else if(simWindow.testName == 'testPromise') {
             [tabledataSeebeck, tabledataElecResi, tabledataThrmCond] = getTestPowellMethodTabledata();
         }
         else {
@@ -970,79 +1027,82 @@ function clearTepTable(table) {
 async function solveTeqnByPowellMethod(J) {
     const chebyshevNodesVec = getChebyshevNodes(dimlessSimParam.numSolChebyshevNodes, 0.0, dimlessSimParam.length);
     const initTempVecExceptBoundary = getLinearVec(chebyshevNodesVec, dimlessSimParam.hotTemp, dimlessSimParam.coldTemp).slice(1,chebyshevNodesVec.length-1);
+    const xL = chebyshevNodesVec[0];
+    const xU = chebyshevNodesVec[chebyshevNodesVec.length-1];
+
     var bounds = [];
     for(let i=0; i<chebyshevNodesVec.length-2; i++) {
         bounds.push([dimlessSimParam.minTemp, dimlessSimParam.maxTemp]);
     };
 
-    simWindow.simTaskName = `Powell Method for I<sub>Ref</sub>=${(J*simParam.refJ*simParam.area/simParam.refI).toFixed(3)}`;
+    simWindow.simTaskName = `Powell Method for I/I<sub>Ref</sub>=${(J*simParam.refJ*simParam.area/simParam.refI).toFixed(3)}`;
 
     function costFunc(tempVecExceptBoundary) {
-        return new Promise(function(resolve, reject) {
-            window.setTimeout(() => {
-                // we do not need to optimize the boundary points.
-                var tempVec = [...tempVecExceptBoundary];
-                tempVec.unshift(dimlessSimParam.hotTemp);
-                tempVec.push(dimlessSimParam.coldTemp);
-                var tempFunc = getPolyChebyshevFuncFromChebyshevNodes(chebyshevNodesVec, tempVec);
-                var refinedTempVec = new getLinearSpace(0.0, dimlessSimParam.length, simWindow.numMinMeshPoints);
-                refinedTempVec = refinedTempVec.map((x) => (tempFunc(x)));
-                
-                howMuchOverMaxTemp = Math.max(...refinedTempVec) - dimlessSimParam.maxTemp;
-                howMuchLessMinTemp = dimlessSimParam.minTemp - Math.min(...refinedTempVec);
-                if(howMuchOverMaxTemp > 0) {
-                    resolve(1.0 + howMuchOverMaxTemp);
-                };
-                if(howMuchLessMinTemp > 0) {
-                    resolve(1.0 + howMuchOverMaxTemp);
-                };
-                // console.log("getIntegralTeqnRhs(), xVec, tempVec, J=", chebyshevNodesVec, tempVec, J);
-                var newTempVec = getIntegralTeqnRhs(chebyshevNodesVec, tempVec, J);  // be careful!
-                // console.log("getIntegralTeqnRhs() done.");
+        // ignore unreasonable values
+        var maxTemp = Math.max(...tempVecExceptBoundary);
+        var minTemp = Math.min(...tempVecExceptBoundary);
+        if(maxTemp >= dimlessSimParam.maxTemp*1.1) {
+            return 1.0 + Math.abs(maxTemp);
+        }
+        if(minTemp <= dimlessSimParam.minTemp*0.9) {
+            return 1.0 + Math.abs(minTemp);
+        }
 
-                const cost = getL2Error(newTempVec, tempVec)
+        // we do not need to optimize the boundary points.
+        var tempVec = [...tempVecExceptBoundary];
+        tempVec.unshift(dimlessSimParam.hotTemp);
+        tempVec.push(dimlessSimParam.coldTemp);        
 
-                resolve(cost);
-            });
-        });
+        // ignore if out-of-bound
+        const tempFunc = getPolyChebyshevFuncFromChebyshevNodes(chebyshevNodesVec, tempVec);
+        const xOfMaxTemp = minimizer.goldenSectionMinimize((x) => (-tempFunc(x)), xL, xU);
+        const xOfMinTemp = minimizer.goldenSectionMinimize(tempFunc, xL, xU);
+        maxTemp = tempFunc(xOfMaxTemp);
+        minTemp = tempFunc(xOfMinTemp);
+        if(maxTemp > dimlessSimParam.maxTemp) {
+            return 1.0 + Math.abs(maxTemp);
+        }
+        if(minTemp < dimlessSimParam.minTemp) {
+            return 1.0 + Math.abs(minTemp);
+        }
+
+        // compute the error
+        var newTempVec = getIntegralTeqnRhs(chebyshevNodesVec, tempVec, J);
+        const cost = getL2Error(newTempVec, tempVec)
+
+        return cost;
     };
 
     function callbackFunc(iter, err, msg=null) {
         return new Promise(function(resolve, reject) {
-            var postfix = "th";
-            if(iter == 1) {
-                postfix = "st";
-            }
-            else if(iter == 2) {
-                postfix = "nd";
-            }
-            else if(iter == 3) {
-                postfix = "rd";
-            }
             if(msg === null) {
-                printSimTaskMessage(`${iter}${postfix} iteration L<sup>2</sup>-error=${err.toExponential(3)}`);
+                printSimTaskMessage(`iter=${iter}: L<sup>2</sup>-error=${err.toExponential(3)}`);
                 animateSimTaskMessageColor(true);
                 resolve();    
             }
             else {
-                printSimTaskMessage(`${iter}${postfix} iteration: ${msg}`);
+                printSimTaskMessage(`iter=${iter}: ${msg}`);
                 animateSimTaskMessageColor(true);
                 resolve();
             };
         });
     }
 
-    console.log("before starting Powell method ...");
     var tempVecExceptBoundary = await minimizer.powellsMethodAsync(costFunc, initTempVecExceptBoundary, 
-        {'bounds': bounds, 'maxIter': dimlessSimParam.numMaxIteration, 'absTolerance': dimlessSimParam.solverTol, 'tolerance': 1e-8, 'lineTolerance': 1e-8, 'verbose': true, 'callback': callbackFunc});
+        {'bounds': bounds, 'maxIter': dimlessSimParam.numMaxIteration,
+         'absTolerance': dimlessSimParam.solverTol, 'tolerance': 1e-8, 'lineTolerance': 1e-8,
+         'ignoreRelTol': false, 'verbose': true, 'callback': callbackFunc});
 
-    console.log("tempVec=", tempVecExceptBoundary);
-    
+    animateSimTaskMessageColor(false);
+        
     var tempVec = [...tempVecExceptBoundary];
     tempVec.unshift(dimlessSimParam.hotTemp);
     tempVec.push(dimlessSimParam.coldTemp);
-    
-    animateSimTaskMessageColor(false);
+
+    // test the validity of solution range
+    if(!isValidTempVec(chebyshevNodesVec, tempVec)) {
+        return {'sol': null, 'success': false};
+    }
 
     return {'sol': tempVec, 'success': true};
 };
@@ -1050,7 +1110,7 @@ async function solveTeqnByPowellMethod(J) {
 async function solveTeqnByPicardIteration(J) {
     const chebyshevNodesVec = getChebyshevNodes(dimlessSimParam.numSolChebyshevNodes, 0.0, dimlessSimParam.length);
     const initTempVec = getLinearVec(chebyshevNodesVec, dimlessSimParam.hotTemp, dimlessSimParam.coldTemp);
-    simWindow.simTaskName = `Picard Iteration for I<sub>Ref</sub>=${(J*simParam.refJ*simParam.area/simParam.refI).toFixed(3)}`;
+    simWindow.simTaskName = `Picard Iteration for I/I<sub>Ref</sub>=${(J*simParam.refJ*simParam.area/simParam.refI).toFixed(3)}`;
 
     var result = await new Promise(function(resolve, reject) {
         var prevTempVec = new Float64Array(initTempVec);
@@ -1064,8 +1124,8 @@ async function solveTeqnByPicardIteration(J) {
             // do clipping to avoid unobserved temperatures ...
             newTempVec = clipByValue(newTempVec, dimlessSimParam.minTemp, dimlessSimParam.maxTemp);
             L2Error = getL2Error(newTempVec, prevTempVec);
-            console.log(`${i}th Picard iteration L^2 error=${L2Error.toExponential(3)}`);
-            printSimTaskMessage(`${i}th iteration L<sup>2</sup>-error=${L2Error.toExponential(3)}`);
+            console.log(`iter=${i}: Picard iteration L^2 error=${L2Error.toExponential(3)}`);
+            printSimTaskMessage(`iter=${i}: L<sup>2</sup>-error=${L2Error.toExponential(3)}`);
             animateSimTaskMessageColor(true);
             if(L2Error <= dimlessSimParam.solverTol) {
                 isConvergent = true;
@@ -1075,21 +1135,10 @@ async function solveTeqnByPicardIteration(J) {
         };
         // test convergence
         if(!isConvergent) {
-            //window.alert("Picard iteration not converged!");
             resolve({'sol': null, 'success': false});
         }
         // test the validity of solution range
-        var newTempFunc = getPolyChebyshevFuncFromChebyshevNodes(chebyshevNodesVec, newTempVec);
-        var refinedNewTempVec = new getLinearSpace(0.0, dimlessSimParam.length, simWindow.numMinMeshPoints);
-        refinedNewTempVec = refinedNewTempVec.map((x) => (newTempFunc(x)));
-        const solMaxTemp = Math.max(...refinedNewTempVec);
-        const solMinTemp = Math.min(...refinedNewTempVec);
-        if(solMaxTemp > dimlessSimParam.maxTemp) {
-            window.alert(`Picard iteration failed: Invalid solution range! Max. Temp of solution=${solMaxTemp*simParam.hotTemp} > ${dimlessSimParam.maxTemp*simParam.hotTemp}.`);
-            resolve({'sol': null, 'success': false});
-        }
-        if(solMinTemp < dimlessSimParam.minTemp) {
-            window.alert(`Picard iteration failed: Invalid solution range! Min. Temp of solution=${solMinTemp*simParam.hotTemp} < ${dimlessSimParam.minTemp*simParam.hotTemp}.`);
+        if(!isValidTempVec(chebyshevNodesVec, newTempVec)) {
             resolve({'sol': null, 'success': false});
         }
     
@@ -1097,6 +1146,24 @@ async function solveTeqnByPicardIteration(J) {
     });
     animateSimTaskMessageColor(false);
     return result;
+};
+
+function isValidTempVec(chebyshevNodesVec, tempVec) {
+        // test the validity of solution range
+        const tempFunc = getPolyChebyshevFuncFromChebyshevNodes(chebyshevNodesVec, tempVec);
+        const xL = chebyshevNodesVec[0];
+        const xU = chebyshevNodesVec[chebyshevNodesVec.length-1];
+        const xOfMaxTemp = minimizer.goldenSectionMinimize((x) => (-tempFunc(x)), xL, xU);
+        const xOfMinTemp = minimizer.goldenSectionMinimize(tempFunc, xL, xU);
+        const solMaxTemp = tempFunc(xOfMaxTemp);
+        const solMinTemp = tempFunc(xOfMinTemp);
+        if(solMaxTemp > dimlessSimParam.maxTemp) {
+            return false;
+        }
+        if(solMinTemp < dimlessSimParam.minTemp) {
+            return false;
+        }
+        return true;
 };
 
 function getTegPerformance(chebyshevNodesVec, tempVec, dimlessJ) {
@@ -1111,8 +1178,6 @@ function getTegPerformance(chebyshevNodesVec, tempVec, dimlessJ) {
     const L = simParam.length;
     const A = simParam.area;
     const funcSeebeck = simParam.funcSeebeck;
-    const funcElecResi = simParam.funcElecResi;
-    const funcThrmCond = simParam.funcThrmCond;
     const barSeebeck = simParam.barSeebeck;
     const Th = simParam.hotTemp;
     const deltaTemp = simParam.deltaTemp;
@@ -1134,10 +1199,10 @@ function getTegPerformance(chebyshevNodesVec, tempVec, dimlessJ) {
     const smallDeltaT2 = adaptiveSimpson((x) => (integrandF2OverThrmCondFunc(x)), 0.0, dimlessSimParam.length, dimlessSimParam.integralEps) * smallDeltaT2Ref;
     const tau = ( (barSeebeck-funcSeebeck(Th))*Th - K*smallDeltaT1 ) / V;
     const beta = 2*K*smallDeltaT2/R - 1;
-    const hotSideFlux = K*deltaTemp + I*barSeebeck*(Th-tau*deltaTemp) - 0.5*I*I*R*(1+beta);
+    const hotSideHeatRate = K*deltaTemp + I*barSeebeck*(Th-tau*deltaTemp) - 0.5*I*I*R*(1+beta);
     const power = I*(V - I*R);
 
-    return {'hotSideFlux': hotSideFlux, 'power': power, 'efficiency': power/hotSideFlux};
+    return {'hotSideHeatRate': hotSideHeatRate, 'power': power, 'efficiency': power/hotSideHeatRate};
 };
 
 function getIntegralTeqnRhs(chebyshevNodesVec, tempVec, J) {
@@ -1202,7 +1267,6 @@ function _getIntegrandF1OverThrmCondFunc(tempFunc) {
 function _getIntegrandFOverThrmCondFunc(tempFunc, J) {
     const integrandFOverThrmCondFunc = function(x) {
         const tempAtX = tempFunc(x);
-        // console.log("tempAtX=", tempAtX);
         const denom = dimlessSimParam.funcThrmCond(tempAtX);
         var result = 0.0;
 
@@ -1277,9 +1341,6 @@ function updateDimlessSimParams() {
         const temp = dimlessTemp * simParam.refTemp;
         return simParam.funcThrmCond(temp) / simParam.refThrmCond;
     };
-
-    //test
-    var testValue = Math.pow(simParam.length*simParam.refJ,2)*simParam.refElecResi / (simParam.hotTemp*simParam.refThrmCond);
 };
 
 function getSolverFunc() {
@@ -1294,6 +1355,19 @@ function getSolverFunc() {
     };
 };
 
+function resetBeforeRunSimulation() {
+    // clear previous results
+    simWindow.chartCurrentVsPower.clearChart();
+    simWindow.chartCurrentVsEfficiency.clearChart();
+    simWindow.isSimResultDrawn = false;
+    $("#report-list").html(`<li>I<sub>Ref</sub>=${simParam.refI} [A]</li>`);
+};
+
+function reportSimResults(J, tegPerformance) {
+    var prevHtml = $("#report-list").html();
+    const resultHtml = `<li>I/I<sub>Ref</sub>=${J} [1], P=${tegPerformance.power} [W], Q<sub>h</sub>=${tegPerformance.hotSideHeatRate} [W] &eta;=${tegPerformance.power/tegPerformance.hotSideHeatRate} [1]</li>`;
+    $("#report-list").html(prevHtml + resultHtml);
+};
 
 async function runSimulation() {
     const chebyshevXVec = getChebyshevNodes(dimlessSimParam.numSolChebyshevNodes, 0.0, 1.0);
@@ -1301,12 +1375,20 @@ async function runSimulation() {
     const numCurrentChebyshevNodes = dimlessSimParam.numCurrentChebyshevNodes;
     const dJ = 0.05;
 
+    resetBeforeRunSimulation();
+
     // set a solver
     var solveTeqn = getSolverFunc();
     if(solveTeqn === null) {
         window.alert("Unknown solver!");
         return;
     };
+
+    // for the case when simulation failed
+    function simFailed() {
+        printSimTaskMessage("Simulation Failed!");
+        return;
+    }
 
     new Promise(async function(resolve, reject) {
         var initialCurrent = dimlessSimParam.initialCurrent;
@@ -1316,32 +1398,14 @@ async function runSimulation() {
         var J;
         var res;
 
-        // find a suitable final current
-        J = finalCurrent;
-        while(J > 0) {
-            res = await solveTeqn(J);
-            if(res.success) {
-                finalCurrent = J;
-                resAtFinalCurrent = res;
-                break;
-            }
-            else {
-                J -= dJ;
-            }
-        };
-        if(J <= 0) {
-            window.alert("Seriously wrong: Final ref. current not found!");
-            reject();
-        }
-        console.log(`Final ref. current ${finalCurrent.toFixed(3)} found.`);
-
         // find a suitable initial current
         if(initialCurrent > finalCurrent) {
             window.alert("Initial ref. current is too large! Make it smaller.");
             reject();
+            return;
         };
         J = initialCurrent;
-        while(J < finalCurrent) {
+        while(J <= finalCurrent) {
             res = await solveTeqn(J);
             if(res.success) {
                 initialCurrent = J;
@@ -1355,22 +1419,42 @@ async function runSimulation() {
         if(J > finalCurrent) {
             window.alert("Seriously wrong: Initial ref. current not found!");
             reject();
+            return;
         }
         console.log(`Initial ref. current ${initialCurrent.toFixed(3)} found.`);
-        console.log("resAtInitialCurrent=", resAtInitialCurrent);
-        console.log("resAtFinalCurrent=", resAtFinalCurrent);
+
+        // find a suitable final current
+        J = finalCurrent;
+        while(J >= initialCurrent) {
+            res = await solveTeqn(J);
+            if(res.success) {
+                finalCurrent = J;
+                resAtFinalCurrent = res;
+                break;
+            }
+            else {
+                J -= dJ;
+            }
+        };
+        if(J < initialCurrent) {
+            window.alert("Seriously wrong: Final ref. current not found!");
+            reject();
+            return;
+        }
+        console.log(`Final ref. current ${finalCurrent.toFixed(3)} found.`);
+
         resolve({initialCurrent: initialCurrent, finalCurrent: finalCurrent, resAtInitialCurrent: resAtInitialCurrent, resAtFinalCurrent: resAtFinalCurrent});
     }).then(function(values) {
         const initialCurrent = values.initialCurrent;
         const finalCurrent = values.finalCurrent;
         const resAtInitialCurrent = values.resAtInitialCurrent;
         const resAtFinalCurrent = values.resAtFinalCurrent;
-        console.log("after current found=", initialCurrent, finalCurrent, resAtInitialCurrent, resAtFinalCurrent);
+
         return new Promise(async function(resolve, reject) {
             // run simulation
             const refCurrentVec = getChebyshevNodes(numCurrentChebyshevNodes, initialCurrent, finalCurrent);
             const powerVec = new Float64Array(numCurrentChebyshevNodes);
-            const hotSideFluxVec = new Float64Array(numCurrentChebyshevNodes);
+            const hotSideHeatRateVec = new Float64Array(numCurrentChebyshevNodes);
             var J;
             var res;
             var yVec;
@@ -1392,25 +1476,33 @@ async function runSimulation() {
                     else {
                         window.alert("Seriously wrong: Computation at an interior ref. current failed!");
                         reject();
+                        return;
                     }
                 }
                 tegPerformance = getTegPerformance(chebyshevXVec, yVec, J);
                 powerVec[i] = tegPerformance.power;
-                hotSideFluxVec[i] = tegPerformance.hotSideFlux;
+                hotSideHeatRateVec[i] = tegPerformance.hotSideHeatRate;
+                reportSimResults(J, tegPerformance);
             }
-            resolve({refCurrentVec: refCurrentVec, powerVec: powerVec, hotSideFluxVec: hotSideFluxVec});
+            resolve({refCurrentVec: refCurrentVec, powerVec: powerVec, hotSideHeatRateVec: hotSideHeatRateVec});
         });
     }).then(function(values) {
-        const refCurrentVec = values.refCurrentVec;
+        dimlessSimParam.refCurrentVec = values.refCurrentVec;
         const powerVec = values.powerVec;
-        const hotSideFluxVec = values.hotSideFluxVec;
+        const hotSideHeatRateVec = values.hotSideHeatRateVec;
         // draw I-power curve and I-efficiency curve
-        const powerFunc = getPolyChebyshevFuncFromChebyshevNodes(refCurrentVec, powerVec);
-        const hotSideFluxFunc = getPolyChebyshevFuncFromChebyshevNodes(refCurrentVec, hotSideFluxVec);
+        simParam.funcPower = getPolyChebyshevFuncFromChebyshevNodes(dimlessSimParam.refCurrentVec, powerVec);
+        simParam.funcHotSideHeatRate = getPolyChebyshevFuncFromChebyshevNodes(dimlessSimParam.refCurrentVec, hotSideHeatRateVec);
 
-        drawCurrentVsPowerChart(refCurrentVec, powerFunc);
-        drawCurrentVsEfficiencyChart(refCurrentVec, (x) => (powerFunc(x) / hotSideFluxFunc(x)));
-    });
+        drawSimResults();
+        simWindow.isSimResultDrawn = true;
+    })
+    .catch(simFailed);
+};
+
+function drawSimResults() {
+    drawCurrentVsPowerChart(dimlessSimParam.refCurrentVec, simParam.funcPower);
+    drawCurrentVsEfficiencyChart(dimlessSimParam.refCurrentVec, (x) => (simParam.funcPower(x) / simParam.funcHotSideHeatRate(x)));
 };
 
 function getChartDataFromVec(xVec, yFunc, xLabel, yLabel, yScale=1.0) {
@@ -1449,7 +1541,7 @@ function getChartDataFromVec(xVec, yFunc, xLabel, yLabel, yScale=1.0) {
     return data;
 };
 
-function drawCurrentVsPowerChart(refCurrentVec, powerFunc) {
+function drawCurrentVsPowerChart(refCurrentVec, funcPower) {
     const chart = simWindow.chartCurrentVsPower;
     const xLabel = "Electric Current [A]";
     const yLabel = "Power [mW]";
@@ -1457,8 +1549,7 @@ function drawCurrentVsPowerChart(refCurrentVec, powerFunc) {
     const xScale = simParam.refI;
     const yScale = 1e3 * simParam.numLegs;  // [mW] * num of legs
 
-    const data = getChartDataFromVec(refCurrentVec.map(x => (x*xScale)), x => powerFunc(x/xScale), xLabel, yTableLabel, yScale);
-    console.log(data);
+    const data = getChartDataFromVec(refCurrentVec.map(x => (x*xScale)), x => funcPower(x/xScale), xLabel, yTableLabel, yScale);
 
     var view = new google.visualization.DataView(data);
     view.setColumns([0, 1, {
@@ -1466,7 +1557,7 @@ function drawCurrentVsPowerChart(refCurrentVec, powerFunc) {
       type: 'number',
       calc: function (dataTable, rowNum) {
           var xValue = dataTable.getValue(rowNum, 0);
-          return powerFunc(xValue/xScale) * yScale;
+          return funcPower(xValue/xScale) * yScale;
       }
     }]);
 
@@ -1499,7 +1590,6 @@ function drawCurrentVsEfficiencyChart(refCurrentVec, efficiencyFunc) {
     const yScale = 100.0;  // [%]
 
     const data = getChartDataFromVec(refCurrentVec.map((x) => (x*xScale)), x => efficiencyFunc(x/xScale), xLabel, yTableLabel, yScale);
-    console.log(data);
 
     var view = new google.visualization.DataView(data);
     view.setColumns([0, 1, {
@@ -1676,9 +1766,6 @@ async function drawTestChart() {
                 console.log(`'${simWindow.testName}' failed with '${simParam.solverName}'.`);
                 printSimTaskMessage(`'${simWindow.testName}' failed with '${simParam.solverName}'.`);
             }
-        }
-        else if(simWindow.testName == 'testPromise') {
-            testPromise();
         }
         else {
             window.alert("Invalid Test Name!");
@@ -1940,41 +2027,4 @@ function testGetPiecewiseLinearFunc() {
     var dataRows, minXValue, maxXValue;
     [dataRows, minXValue, maxXValue] = getDataRows(simWindow.tableSeebeck.getData(), "temperature", "seebeck");
     return getPiecewiseLinearFunc(dataRows);
-};
-
-async function testPromise() {
-    var result = await testPromiseAsync();
-
-    console.log("testPromise=", result);
-};
-
-let testVar = 0.0;
-async function testPromiseAsync() {
-    var result = 0.0;
-    var promise;
-    var allPromise = [];
-    simWindow.simTaskName = simWindow.testName;
-
-    for(let i=0; i<100; i++) {
-        promise = sleep(i*20).then(() => {
-            printSimTaskMessage(`${i}th Doing!`);
-            animateSimTaskMessageColor(true);
-            return i;
-        });
-        allPromise.push(promise);
-    };
-    testVar = await Promise.all(allPromise).then((values) => {
-        animateSimTaskMessageColor(false);
-        console.log(values);
-        return values.reduce((accumulatedValue, currentValue) => (accumulatedValue + currentValue));
-    });
-    console.log("testVar=", testVar);
-    console.log("result=", result);
-
-    return result
-};
-
-// sleep time expects milliseconds
-function sleep (time) {
-    return new Promise((resolve) => setTimeout(resolve, time));
 };

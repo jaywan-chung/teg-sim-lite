@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-168551334-1"></script>
+    <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'UA-168551334-1');
+    </script>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
@@ -146,13 +156,19 @@
                         <a href="#">
                             <div class="photo" style="background-image: url(images/members/jongho_park.jpg)"></div>
                             <div class="member_title">
-                                <h3>JongHo Park</h3>
+                                <h3>Jongho Park</h3>
                                 <p></p>
-                                <p>M.S.</p>
+                                <p>M.S. in Materials Science</p>
                             </div>
                             <div class="interest">
-                                <p>Synthesis of thermoelectric materials, Development of thermoelectric modules</p>
+                                <p>Synthesis of thermoelectric materials:</p>
                                 <ul>
+                                    <li>Lead telluride</li>
+                                </ul>
+                                <p>Development of thermoelectric generator modules:</p>
+                                <ul>
+                                    <li>Single-type modules</li>
+                                    <li>Segmented-type modules</li>
                                 </ul>
                             </div>
                         </a>
@@ -210,7 +226,7 @@
     <section id="section-develop-history" class="contents-section">
         <div class="container">
             <br/><br/>
-            <h2>알파버젼 개발 일지 (2020.06.03, ver.0.51a)</h2>
+            <h2>알파버젼 개발 일지 (2020.06.05, ver.0.52a)</h2>
             <div style="font-size: 1.5rem;">
                 <p>아래 진척도에서 &check;항목은 구현한 것,&nbsp; -항목은 구현 예정입니다.</p>
                 <p>그 밖의 요청사항 있으시면 정재환에게 연락주세요.</p>
@@ -228,7 +244,7 @@
                     <ul style="list-style: none;">
                         <li>&check; 다항식 regression 가능: 1차~5차 다항식. Powell method로 최적화.</li>
                         <li>&check; 다항식 interpolation 가능: Chebyshev nodes 이용.</li>
-                        <li>&check; Piecewise linear interpolation 가능.</li>
+                        <li>&check; Piecewise linear interpolation 가능. (2020.06.03)</li>
                         <li>- 기타 regression model: 요청이 있으면 추가할 예정.</li>
                         <li>- 결과를 csv 파일로 저장: 도출한 곡선 전체를 csv 파일로 저장하여, 별도의 프로그램(엑셀, 오리진 등)에서 이용할 수 있게 함.</li>
                     </ul>
@@ -243,11 +259,14 @@
                     <ul style="list-style: none;">
                         <li>&check; 전류[A]-출력[mW] 커브 출력.</li>
                         <li>&check; 전류[A]-효율[%] 커브 출력.</li>
-                        <li>- 최대출력 및 해당전류 값 출력.</li>
-                        <li>- 최대효율 및 해당전류 값 출력.</li>
+                        <li>&check; 시뮬레이션을 시작하기 전에, 이상한 물성에 대해서는 경고:</li>
+                        <ul>
+                            <li>&check; 측정 온도범위를 벗어나는 온도.</li>
+                            <li>- 저온이 고온보다 높을 경우 (열냉각기 테스트를 위해 경고 보류).</li>
+                        </ul>
+                        <li>&check; 시뮬레이션의 결과의 오차를 예측해 출력.</li>
+                        <li>&check; 최대출력/최대효율 및 해당전류 값 출력.</li>
                         <li>- 결과를 csv 파일로 저장.</li>
-                        <li>- 시뮬레이션의 결과의 오차를 예측해 출력.</li>
-                        <li>- 시뮬레이션을 시작하기 전에, 이상한 물성에 대해서는 경고하기 (ZT>10, 너무 작거나 너무 큰 물성들 등).</li>
                     </ul>
                     <li>5. About page</li>
                     <ul style="list-style: none;">
@@ -257,9 +276,7 @@
                     </ul>
                     <li>6. 기타</li>
                     <ul style="list-style: none;">
-                        <li>- 방문자수 카운터 달기: 몇 명이나 이용하는지 알 수 있도록.</li>
-                        <li>- 파워/효율 커브의 flex가 오작동: 커브를 다시 그리도록 수정 필요.</li>
-                        <li>- 휴대기기 화면에서 About page 상단의 메뉴가 제대로 표시되지 않는 문제 수정; flex 추가.</li>
+                        <li>&check; Google Analytics 웹사이트 통계 기능 추가.</li>
                     </ul>
                 </ul>
             </div>
@@ -267,7 +284,8 @@
             <div style="font-size: 1.5rem;">
                 <h3>Brief History</h3>
                 <ul>
-                    <li>June 3, 2020: Ver.0.51a release: stabilization of Powell method, add piecewise linear interpolation, and minor changes.</li>
+                    <li>June 5, 2020: Ver.0.52a release: add performance report, add print style, add Google Analytics, stabilize Powell method.</li>
+                    <li>June 3, 2020: Ver.0.51a release: stabilize Powell method, add piecewise linear interpolation, and minor changes.</li>
                     <li>June 2, 2020: Ver.0.5 released.</li>
                 </ul>
             </div>

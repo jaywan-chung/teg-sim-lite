@@ -9,6 +9,7 @@
 const simWindow = {
     isTepFuncUpdated: false,
     isSimResultDrawn: false,
+    isPerformTableDrawn: false,
     chartHeight: 500,
     colorRawData: '#1976D2', // '#1E88E5', //'#1565C0',
     colorFormula: '#D32F2F',
@@ -18,6 +19,14 @@ const simWindow = {
     tableSeebeck: null,
     tableElecResi: null,
     tableThrmCond: null,
+    numPerformTableDigits: 5,
+    tabledataPerformByCurrent: null,
+    tablePerformByCurrent: null,
+    tablePerformReport: null,
+    performAtOpenCircuit: null,
+    performAtMaxPower: null,
+    performAtMaxEfficiency: null,
+    performArray: null,
     chartSeebeck: null,
     chartElecResi: null,
     chartThrmCond: null,
@@ -82,6 +91,9 @@ const dimlessSimParam = {
     initialCurrent: null,
     finalCurrent: null,
     refCurrentVec: null,
+    powerVec: null,
+    hotSideHeatRateVec: null,
+    tempVecArray: null,
     numMeshPoints: null,
     numSolChebyshevNodes: 11,
     numCurrentChebyshevNodes: null,
@@ -95,6 +107,10 @@ $(function(){
     google.charts.load('current', {'packages':['corechart']});
     google.charts.setOnLoadCallback(activateChartsAndButtons); // activate buttons when google charts is loaded.
     
+    if(!simWindow.isTestMode) {
+        $("#test-section").hide();
+    };
+
     /* responsive chart */
     $(window).resize(function() {
         if(simWindow.isTepFuncUpdated) {
@@ -133,50 +149,37 @@ function activateChartsAndButtons() {
     // for test
     if(simWindow.isTestMode) {
         activateTestRunButton();
-    }
-    else {
-        $("#test-section").hide();
     };
-
-    return true;
 }
 
 function activateRunSimButton() {
+    function simAborted() {
+        console.log("Simulation aborted.")
+        return;
+    };
+
     $("#run-sim-button").click(function() {
         if(simWindow.isTepFuncUpdated) {
             new Promise(function(resolve, reject) {
+                disableAllButtons();
                 updateSolverParamsFromForms();
                 updateSimParamsFromForms();
                 updateDimlessSimParams();
                 const isValidSimParams = checkValidityOfSimParams();
                 if(!isValidSimParams) {
                     reject();
+                    return;
                 }
                 resolve();
             })
             .then(function() {
-                return new Promise(function(resolve, reject) {
-                    window.setTimeout(async function() {
-                        console.log("Update Solver Params ok.");
-                        // show the result section and run the simulation.
-                        $("#section-sim-result").show();
-                        await runSimulation();
-                        resolve();
-                    });
+                return new Promise(async function(resolve, reject) {
+                    console.log("Update Solver Params ok.");
+                    // show the result section and run the simulation.
+                    $("#section-sim-result").show();
+                    resolve(await runSimulation());
                 });
-            }, function() {
-                return new Promise(function(resolve, reject) {
-                    reject();
-                });
-            })
-            .then(function() {
-                window.setTimeout(() => {
-                    console.log("Simulation complete.");
-                });
-            }, function() {
-                console.log("Simulation aborted.")
-                return;
-            });
+            }, simAborted);
         }
         else {
             window.alert("Please compute TEP formula first.");
@@ -186,6 +189,7 @@ function activateRunSimButton() {
 
 function activateTestRunButton() {
     $("#test-run").click(function() {
+        disableAllButtons();
         computeTepFormula()
         .then(function() {
             return new Promise(function(resolve, reject) {
@@ -213,6 +217,7 @@ function activateTestRunButton() {
         .then(function() {
             console.log("Loop4 ok.");
         });
+        enableAllButtons();
     });
 };
 
@@ -224,25 +229,26 @@ function activateComputeFormulaButton() {
 
 function checkValidityOfSimParams() {
     console.log()
-    if(simParam.coldTemp < simParam.minTemp) {
-        window.alert("Cold-side temp. is too low: the TEPs are unknown.");
+    if(simParam.coldTemp < simParam.minTemp || simParam.hotTemp < simParam.minTemp) {
+        window.alert("Operation temp. is too low: the TEPs are unknown.");
         return false;
     }
-    if(simParam.hotTemp > simParam.maxTemp ) {
-        window.alert("Hot-side temp. is too high: the TEPs are unknown.");
+    if(simParam.hotTemp > simParam.maxTemp || simParam.coldTemp > simParam.maxTemp) {
+        window.alert("Operation temp. is too high: the TEPs are unknown.");
         return false;
     }
-    if(simParam.coldTemp > simParam.hotTemp) {
-        window.alert("Hot-side temp. should be larger than cold-side temp.");        
-        return false;
-        
-    }
+    // if(simParam.coldTemp > simParam.hotTemp) {
+    //     window.alert("Hot-side temp. should be larger than cold-side temp.");        
+    //     return false;
+    // }
+
     return true;
 };
 
 function computeTepFormula() {
     var promise = new Promise(function(resolve, reject) {
         // do regression or interpolation of TEPs
+        disableAllButtons();
         $("#compute-formula").hide();
         $("#chart-message").show();
         $("#tep-chart-container").hide();
@@ -257,6 +263,7 @@ function computeTepFormula() {
     })
     .then(function() {
         window.setTimeout(function() {
+            enableAllButtons();
             $("#chart-message").hide();
             $("#compute-formula").show();
 
@@ -275,6 +282,14 @@ function computeTepFormula() {
             };
         });
     });
+};
+
+function disableAllButtons() {
+    $(".selection-button").prop("disabled", true);
+};
+
+function enableAllButtons() {
+    $(".selection-button").prop("disabled", false);
 };
 
 function animateSimTaskMessageColor(isAnimateColor=true) {
@@ -910,7 +925,119 @@ function getSelectTepMethodSuboptionId(tepName) {
     return `#select-${tepName}-suboption`;
 };
 
+function drawPerformTables() {
+    //define some sample data
+    // const tabledataPerformByCurrent = [
+    //     {id:1, current: 0*simParam.refI, power: 0, efficiency: 0, hotSideHeatRate: 1.826258350136605,},
+    //     {id:2, current: 0.024471741852423234*simParam.refI, power: 0.003958486016628933, efficiency: 0.0021591520790648694, hotSideHeatRate: 1.8333521084551658,},
+    //     {id:3, current: 0.09549150281252627*simParam.refI, power: 0.014321700716581906, efficiency: 0.007727485673469251, hotSideHeatRate: 1.8533454893035326,},
+    //     {id:4, current: 0.20610737385376343*simParam.refI, power: 0.027128957594365875, efficiency: 0.014409373477990296, hotSideHeatRate: 1.8827298519123126,},
+    //     {id:5, current: 0.3454915028125263*simParam.refI, power: 0.037479054319066986, efficiency: 0.019553776525772247, hotSideHeatRate: 1.916716920113559,},
+    //     {id:6, current: 0.49999999999999994*simParam.refI, power: 0.04139632469355911, efficiency: 0.021224078451195727, hotSideHeatRate: 1.950441560454509,},
+    //     {id:7, current: 0.6545084971874737*simParam.refI, power: 0.03734874094702167, efficiency: 0.018862758935176537, hotSideHeatRate: 1.9800253544761806,},
+    //     {id:8, current: 0.7938926261462365*simParam.refI, power: 0.026843048704439886, efficiency: 0.013400269868632967, hotSideHeatRate: 2.003172247095818,},
+    //     {id:9, current: 0.9045084971874737*simParam.refI, power: 0.01386415786673019, efficiency: 0.006866302819344655, hotSideHeatRate: 2.0191591066549313,},
+    //     {id:10, current: 0.9755282581475768*simParam.refI, power: 0.003360378600838312, efficiency: 0.0016567340460761524, hotSideHeatRate: 2.0283150508055963,},
+    //     {id:11, current: 1*simParam.refI, power: -0.0006529285412627917, efficiency: -0.00032143863323646, hotSideHeatRate: 2.0312696538330464,},
+    // ];
+    // const tabledataPerformReport = [
+    //     {parameterName: "I [A]", groupName: "Device performance", openCircuit: 0, maxPower: 0.49999999999999994*simParam.refI, maxEfficiency: 0.6545084971874737*simParam.refI,},
+    //     {parameterName: "I [A]", groupName: "Device performance", openCircuit: 0, maxPower: 0.49999999999999994*simParam.refI, maxEfficiency: 0.6545084971874737*simParam.refI,},
+    //     {parameterName: "I [A]", groupName: "Device performance", openCircuit: 0, maxPower: 0.49999999999999994*simParam.refI, maxEfficiency: 0.6545084971874737*simParam.refI,},
+    //     {parameterName: "Q<sub>h</sub> [W]", groupName: "Heat rate", openCircuit: 0, maxPower: 0.49999999999999994*simParam.refI, maxEfficiency: 0.6545084971874737*simParam.refI,},
+    //     {parameterName: "Q<sub>h</sub> [W]", groupName: "Heat rate", openCircuit: 0, maxPower: 0.49999999999999994*simParam.refI, maxEfficiency: 0.6545084971874737*simParam.refI,},
+    // ];
+
+    function toExponentialFormatter (cell, formatterParams, onRendered){
+        //cell - the cell component
+        //formatterParams - parameters set for the column
+        //onRendered - function to call when the formatter has been rendered
+    
+        const numberValue = Number(cell.getValue());
+        if(numberValue === 0.0) {
+            return "0";
+        }
+        if(numberValue>=1 && numberValue<10) {
+            return numberValue.toFixed(simWindow.numPerformTableDigits);
+        }
+    
+        return numberValue.toExponential(simWindow.numPerformTableDigits); //return the contents of the cell;
+    };    
+
+    simWindow.tablePerformByCurrent = new Tabulator("#table-perform-by-current", {
+        // height: simParam.numCurrentChebyshevNodes*10 + 50,
+        data: simWindow.tabledataPerformByCurrent,
+        resizableColumns: false,
+        selectable: "highlight",
+        clipboard: true,
+        clipboardPasteAction: "replace",
+        // layout: "fitColumns", //fit columns to width of table (optional)
+        columns: [ //Define Table Columns
+            {title:"No.", field:"id", width: 60, hozAlign:"center", sorter:"number",},
+            {title:"Current [A]", field:"current", width: 150, hozAlign:"center", formatter: toExponentialFormatter, sorter:"number",},
+            {title:"Power [W]", field:"power", width: 150, hozAlign:"center", formatter: toExponentialFormatter, sorter:"number",},
+            {title:"Efficiency [1]", field:"efficiency", width: 150, hozAlign:"center", formatter: toExponentialFormatter, sorter:"number",},
+            {title:"Q<sub>h</sub> [W]", field:"hotSideHeatRate", width: 150, hozAlign:"center", formatter: toExponentialFormatter, sorter:"number",},
+        ],
+    });
+
+    var tabledataPerformReport = [
+        {parameterName: "I [A]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.I, maxPower: simWindow.performAtMaxPower.I, maxEfficiency: simWindow.performAtMaxEfficiency.I,},
+        {parameterName: "R<sub>L</sub>/R [1]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.gamma, maxPower: simWindow.performAtMaxPower.gamma, maxEfficiency: simWindow.performAtMaxEfficiency.gamma,},
+        {parameterName: "V=V<sub>gen</sub>-IR [V]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.V, maxPower: simWindow.performAtMaxPower.V, maxEfficiency: simWindow.performAtMaxEfficiency.V,},
+        {parameterName: "Power [W]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.power, maxPower: simWindow.performAtMaxPower.power, maxEfficiency: simWindow.performAtMaxEfficiency.power,},
+        {parameterName: "Efficiency [1]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.efficiency, maxPower: simWindow.performAtMaxPower.efficiency, maxEfficiency: simWindow.performAtMaxEfficiency.efficiency,},
+        {parameterName: "Total Q<sub>h</sub> [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRate, maxPower: simWindow.performAtMaxPower.hotSideHeatRate, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRate,},
+        {parameterName: "Diffusion [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRateDiffusion, maxPower: simWindow.performAtMaxPower.hotSideHeatRateDiffusion, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRateDiffusion,},
+        {parameterName: "Peltier [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRatePeltier, maxPower: simWindow.performAtMaxPower.hotSideHeatRatePeltier, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRatePeltier,},
+        {parameterName: "Joule [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRateJoule, maxPower: simWindow.performAtMaxPower.hotSideHeatRateJoule, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRateJoule,},
+        {parameterName: "Total Q<sub>c</sub> [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRate, maxPower: simWindow.performAtMaxPower.coldSideHeatRate, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRate,},
+        {parameterName: "Diffusion [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRateDiffusion, maxPower: simWindow.performAtMaxPower.coldSideHeatRateDiffusion, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRateDiffusion,},
+        {parameterName: "Peltier [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRatePeltier, maxPower: simWindow.performAtMaxPower.coldSideHeatRatePeltier, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRatePeltier,},
+        {parameterName: "Joule [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRateJoule, maxPower: simWindow.performAtMaxPower.coldSideHeatRateJoule, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRateJoule,},
+        {parameterName: "V<sub>gen</sub> [V]", groupName: "Device parameter", openCircuit: simWindow.performAtOpenCircuit.Vgen, maxPower: simWindow.performAtMaxPower.Vgen, maxEfficiency: simWindow.performAtMaxEfficiency.Vgen,},
+        {parameterName: "R inside leg [Ω]", groupName: "Device parameter", openCircuit: simWindow.performAtOpenCircuit.R, maxPower: simWindow.performAtMaxPower.R, maxEfficiency: simWindow.performAtMaxEfficiency.R,},
+        {parameterName: "K inside leg [W]", groupName: "Device parameter", openCircuit: simWindow.performAtOpenCircuit.K, maxPower: simWindow.performAtMaxPower.K, maxEfficiency: simWindow.performAtMaxEfficiency.K,},
+        {parameterName: "<SPAN STYLE='text-decoration:overline'>&alpha;</SPAN> [V]", groupName: "Average parameter", openCircuit: simWindow.performAtOpenCircuit.alphaBar, maxPower: simWindow.performAtMaxPower.alphaBar, maxEfficiency: simWindow.performAtMaxEfficiency.alphaBar,},
+        {parameterName: "<SPAN STYLE='text-decoration:overline'>&rho;</SPAN> [Ω m]", groupName: "Average parameter", openCircuit: simWindow.performAtOpenCircuit.rhoBar, maxPower: simWindow.performAtMaxPower.rhoBar, maxEfficiency: simWindow.performAtMaxEfficiency.rhoBar,},
+        {parameterName: "<SPAN STYLE='text-decoration:overline'>&kappa;</SPAN> [W/m/K]", groupName: "Average parameter", openCircuit: simWindow.performAtOpenCircuit.kappaBar, maxPower: simWindow.performAtMaxPower.kappaBar, maxEfficiency: simWindow.performAtMaxEfficiency.kappaBar,},
+        {parameterName: "Z<sub>gen</sub> [1/K]", groupName: "Degrees of freedom", openCircuit: simWindow.performAtOpenCircuit.Zgen, maxPower: simWindow.performAtMaxPower.Zgen, maxEfficiency: simWindow.performAtMaxEfficiency.Zgen,},
+        {parameterName: "hidden 1 [1/K]", groupName: "Degrees of freedom", openCircuit: simWindow.performAtOpenCircuit.hidden1, maxPower: simWindow.performAtMaxPower.hidden1, maxEfficiency: simWindow.performAtMaxEfficiency.hidden1,},
+        {parameterName: "hidden 2 [1/K]", groupName: "Degrees of freedom", openCircuit: simWindow.performAtOpenCircuit.hidden2, maxPower: simWindow.performAtMaxPower.hidden2, maxEfficiency: simWindow.performAtMaxEfficiency.hidden2,},
+    ];
+
+    simWindow.tablePerformReport = new Tabulator("#table-perform-report", {
+        // height: (tabledataPerformReport.length+6)*10 + 50,
+        data: tabledataPerformReport,
+        resizableColumns: false,
+        selectable: "highlight",
+        clipboard: true,
+        clipboardPasteAction: "replace",
+        groupBy: "groupName",
+        groupHeader: function(value, count, data, group){
+            //value - the value all members of this group share
+            //count - the number of rows in this group
+            //data - an array of all the row data objects in this group
+            //group - the group component for the group
+        
+            //return value + "<span style='color:#d00; margin-left:10px;'>(" + count + " item)</span>";
+            return value;
+        },
+        //layout: "fitColumns", //fit columns to width of table (optional)
+        columns: [
+            {title:"Parameter", field:"parameterName", width: 150, hozAlign: "center", formatter: "html", headerSort: false,},
+            {title:"Group name", field:"groupName", visible: false, width: 150, hozAlign: "center", headerSort: false,},
+            {title:"Open circuit", field:"openCircuit", width: 150, hozAlign: "center", formatter: toExponentialFormatter, headerSort: false,},
+            {title:"Max. Power", field:"maxPower", width: 150, hozAlign: "center", formatter: toExponentialFormatter, headerSort: false,},
+            {title:"Max. Efficiency", field:"maxEfficiency", width: 150, hozAlign: "center", formatter: toExponentialFormatter, headerSort: false,},
+        ],
+    });
+};
+
 function initTepTables() {
+    const rowSelectionColumnWidth = 45; // px
+    const tempColumnWidth = 100; // px
+    const propertyColumnWidth = 145; // px
     var tabledataSeebeck, tableElecResi, tableThrmCond;
     var tabledataSeebeck, tabledataElecResi, tabledataThrmCond;
     //define some sample data
@@ -945,13 +1072,14 @@ function initTepTables() {
         height: "250px",
         data: tabledataSeebeck,
         resizableColumns: false,
-        selectable: true,
+        selectable: "highlight",
         clipboard: true,
         clipboardPasteAction: "replace",
-        layout: "fitColumns", //fit columns to width of table (optional)
+        // layout: "fitColumns", //fit columns to width of table (optional)
         columns: [ //Define Table Columns
-            {title:"Temp. [K]", field:"temperature", hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
-            {title:"[V/K]", field:"seebeck", hozAlign:"center", sorter:"number", validator:"numeric", editor:true},
+            {formatter:"rowSelection", titleFormatter:"rowSelection", width: rowSelectionColumnWidth, hozAlign:"center", headerSort:false},
+            {title:"Temp. [K]", field:"temperature", width: tempColumnWidth, hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
+            {title:"[V/K]", field:"seebeck", width: propertyColumnWidth, hozAlign:"center", sorter:"number", validator:"numeric", editor:true},
         ],
     });
 
@@ -959,61 +1087,63 @@ function initTepTables() {
         height: "250px",
         data: tabledataElecResi,
         resizableColumns: false,
-        selectable: true,
+        selectable: "highlight",
         clipboard: true,
         clipboardPasteAction: "replace",
-        layout: "fitColumns", //fit columns to width of table (optional)
+        //layout: "fitColumns", //fit columns to width of table (optional)
         columns: [
-            {title:"Temp. [K]", field:"temperature", hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
-            {title:"[Ω m]", field:"elecResi", hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
+            {formatter:"rowSelection", titleFormatter:"rowSelection", width: rowSelectionColumnWidth, hozAlign:"center", headerSort:false},
+            {title:"Temp. [K]", field:"temperature", width: tempColumnWidth, hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
+            {title:"[Ω m]", field:"elecResi", width: propertyColumnWidth, hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
         ],
-    });  
+    });
 
     var tableThrmCond = new Tabulator("#tep-table-thrm-cond", {
         height: "250px",
         data: tabledataThrmCond,
         resizableColumns: false,
-        selectable: true,
+        selectable: "highlight",
         clipboard: true,
         clipboardPasteAction: "replace",
-        layout: "fitColumns", //fit columns to width of table (optional)
+        //layout: "fitColumns", //fit columns to width of table (optional)
         columns: [
-            {title:"Temp. [K]", field:"temperature", hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
-            {title:"[W/m/K]", field:"thrmCond", hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
+            {formatter:"rowSelection", titleFormatter:"rowSelection", width: rowSelectionColumnWidth, hozAlign:"center", headerSort:false},
+            {title:"Temp. [K]", field:"temperature", width: tempColumnWidth, hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
+            {title:"[W/m/K]", field:"thrmCond", width: propertyColumnWidth, hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
         ],
-    });
-
-    $("#add-row-tep-table-seebeck").click(function() {
-        tableSeebeck.addRow({}, false);  // false means add to the bottom
-    });
-    $("#delete-row-tep-table-seebeck").click(function() {
-        tableSeebeck.deleteRow(tableSeebeck.getSelectedRows());
-    });
-    $("#clear-tep-table-seebeck").click(function() {
-        clearTepTable(tableSeebeck);
-    });
-    $("#add-row-tep-table-elec-resi").click(function() {
-        tableElecResi.addRow({}, false);  // false means add to the bottom
-    });
-    $("#delete-row-tep-table-elec-resi").click(function() {
-        tableElecResi.deleteRow(tableElecResi.getSelectedRows());
-    });
-    $("#clear-tep-table-elec-resi").click(function() {
-        clearTepTable(tableElecResi);
-    });
-    $("#add-row-tep-table-thrm-cond").click(function() {
-        tableThrmCond.addRow({}, false);  // false means add to the bottom
-    });
-    $("#delete-row-tep-table-thrm-cond").click(function() {
-        tableThrmCond.deleteRow(tableThrmCond.getSelectedRows());
-    });
-    $("#clear-tep-table-thrm-cond").click(function() {
-        clearTepTable(tableThrmCond);
     });
 
     simWindow.tableSeebeck = tableSeebeck;
     simWindow.tableElecResi = tableElecResi;
     simWindow.tableThrmCond = tableThrmCond;
+
+    $("#add-row-tep-table-seebeck").click(function() {
+        simWindow.tableSeebeck.addRow({}, false);  // false means add to the bottom
+    });
+    $("#delete-row-tep-table-seebeck").click(function() {
+        simWindow.tableSeebeck.deleteRow(simWindow.tableSeebeck.getSelectedRows());
+    });
+    $("#clear-tep-table-seebeck").click(function() {
+        clearTepTable(simWindow.tableSeebeck);
+    });
+    $("#add-row-tep-table-elec-resi").click(function() {
+        simWindow.tableElecResi.addRow({}, false);  // false means add to the bottom
+    });
+    $("#delete-row-tep-table-elec-resi").click(function() {
+        simWindow.tableElecResi.deleteRow(simWindow.tableElecResi.getSelectedRows());
+    });
+    $("#clear-tep-table-elec-resi").click(function() {
+        clearTepTable(simWindow.tableElecResi);
+    });
+    $("#add-row-tep-table-thrm-cond").click(function() {
+        simWindow.tableThrmCond.addRow({}, false);  // false means add to the bottom
+    });
+    $("#delete-row-tep-table-thrm-cond").click(function() {
+        simWindow.tableThrmCond.deleteRow(simWindow.tableThrmCond.getSelectedRows());
+    });
+    $("#clear-tep-table-thrm-cond").click(function() {
+        clearTepTable(simWindow.tableThrmCond);
+    });
 };
 
 function clearTepTable(table) {
@@ -1041,10 +1171,10 @@ async function solveTeqnByPowellMethod(J) {
         // ignore unreasonable values
         var maxTemp = Math.max(...tempVecExceptBoundary);
         var minTemp = Math.min(...tempVecExceptBoundary);
-        if(maxTemp >= dimlessSimParam.maxTemp*1.1) {
+        if(maxTemp > dimlessSimParam.maxTemp) {
             return 1.0 + Math.abs(maxTemp);
         }
-        if(minTemp <= dimlessSimParam.minTemp*0.9) {
+        if(minTemp < dimlessSimParam.minTemp) {
             return 1.0 + Math.abs(minTemp);
         }
 
@@ -1053,10 +1183,10 @@ async function solveTeqnByPowellMethod(J) {
         tempVec.unshift(dimlessSimParam.hotTemp);
         tempVec.push(dimlessSimParam.coldTemp);        
 
-        // ignore if out-of-bound
+        // // give a closer inspection: a little bit faster; (1min 29.47 sec --> 1min 28.24 sec)
         const tempFunc = getPolyChebyshevFuncFromChebyshevNodes(chebyshevNodesVec, tempVec);
-        const xOfMaxTemp = minimizer.goldenSectionMinimize((x) => (-tempFunc(x)), xL, xU);
-        const xOfMinTemp = minimizer.goldenSectionMinimize(tempFunc, xL, xU);
+        const xOfMaxTemp = minimizer.goldenSectionMinimize((x) => (-tempFunc(x)), xL, xU, 1e-8);
+        const xOfMinTemp = minimizer.goldenSectionMinimize(tempFunc, xL, xU, 1e-8);
         maxTemp = tempFunc(xOfMaxTemp);
         minTemp = tempFunc(xOfMinTemp);
         if(maxTemp > dimlessSimParam.maxTemp) {
@@ -1091,7 +1221,7 @@ async function solveTeqnByPowellMethod(J) {
     var tempVecExceptBoundary = await minimizer.powellsMethodAsync(costFunc, initTempVecExceptBoundary, 
         {'bounds': bounds, 'maxIter': dimlessSimParam.numMaxIteration,
          'absTolerance': dimlessSimParam.solverTol, 'tolerance': 1e-8, 'lineTolerance': 1e-8,
-         'ignoreRelTol': false, 'verbose': true, 'callback': callbackFunc});
+         'ignoreRelTol': true, 'verbose': true, 'callback': callbackFunc});
 
     animateSimTaskMessageColor(false);
         
@@ -1101,10 +1231,15 @@ async function solveTeqnByPowellMethod(J) {
 
     // test the validity of solution range
     if(!isValidTempVec(chebyshevNodesVec, tempVec)) {
-        return {'sol': null, 'success': false};
+        return {'success': false, 'sol': null};
     }
+    // compute the cost again
+    const newTempVec = getIntegralTeqnRhs(chebyshevNodesVec, tempVec, J);
+    const L2Error = getL2Error(newTempVec, tempVec);
+    printSimTaskMessage(`L<sup>2</sup>-error=${L2Error.toExponential(3)}`);
+    console.log(`Solving complete: L^2-error=${L2Error.toExponential(3)}`)
 
-    return {'sol': tempVec, 'success': true};
+    return {'success': true, 'sol': tempVec, 'L2Error': L2Error};
 };
 
 async function solveTeqnByPicardIteration(J) {
@@ -1116,7 +1251,6 @@ async function solveTeqnByPicardIteration(J) {
         var prevTempVec = new Float64Array(initTempVec);
         var newTempVec;
         var isConvergent = false;
-        var LInftyError;
         var L2Error;
     
         for(let i=0; i<dimlessSimParam.numMaxIteration; i++) {
@@ -1135,14 +1269,14 @@ async function solveTeqnByPicardIteration(J) {
         };
         // test convergence
         if(!isConvergent) {
-            resolve({'sol': null, 'success': false});
+            resolve({'success': false, 'sol': null});
         }
         // test the validity of solution range
         if(!isValidTempVec(chebyshevNodesVec, newTempVec)) {
-            resolve({'sol': null, 'success': false});
+            resolve({'success': false, 'sol': null});
         }
     
-        resolve({'sol': newTempVec, 'success': true});
+        resolve({'success': true, 'sol': newTempVec, 'L2Error': L2Error});
     });
     animateSimTaskMessageColor(false);
     return result;
@@ -1185,7 +1319,7 @@ function getTegPerformance(chebyshevNodesVec, tempVec, dimlessJ) {
     const refElecResi = simParam.refElecResi;
     const refThrmCond = simParam.refThrmCond;
 
-    const V = simParam.barSeebeck*simParam.deltaTemp;
+    const Vgen = simParam.barSeebeck*simParam.deltaTemp;
     const RRef = L*refElecResi/A;  // ok
     const KRef = A*refThrmCond/L;  // ok
     const IRef = simParam.refI;  // ok
@@ -1197,12 +1331,34 @@ function getTegPerformance(chebyshevNodesVec, tempVec, dimlessJ) {
     const K = (1/integralOneOfKappaTermVec[lenVec-1]) * KRef;
     const smallDeltaT1 = adaptiveSimpson((x) => (integrandF1OverThrmCondFunc(x)), 0.0, dimlessSimParam.length, dimlessSimParam.integralEps) * smallDeltaT1Ref;
     const smallDeltaT2 = adaptiveSimpson((x) => (integrandF2OverThrmCondFunc(x)), 0.0, dimlessSimParam.length, dimlessSimParam.integralEps) * smallDeltaT2Ref;
-    const tau = ( (barSeebeck-funcSeebeck(Th))*Th - K*smallDeltaT1 ) / V;
+    const tau = ( (barSeebeck-funcSeebeck(Th))*Th - K*smallDeltaT1 ) / Vgen;
     const beta = 2*K*smallDeltaT2/R - 1;
-    const hotSideHeatRate = K*deltaTemp + I*barSeebeck*(Th-tau*deltaTemp) - 0.5*I*I*R*(1+beta);
-    const power = I*(V - I*R);
+    const hotSideHeatRateDiffusion = K*deltaTemp;
+    const hotSideHeatRatePeltier = I*barSeebeck*(Th-tau*deltaTemp)
+    const hotSideHeatRateJoule = -0.5*I*I*R*(1+beta)
+    const hotSideHeatRate = hotSideHeatRateDiffusion + hotSideHeatRatePeltier + hotSideHeatRateJoule;
+    //const hotSideHeatRate = K*deltaTemp + I*barSeebeck*(Th-tau*deltaTemp) - 0.5*I*I*R*(1+beta);    
+    const power = I*(Vgen - I*R);
 
-    return {'hotSideHeatRate': hotSideHeatRate, 'power': power, 'efficiency': power/hotSideHeatRate};
+    // for reference
+    const Tc = simParam.coldTemp;
+    const coldSideHeatRateDiffusion = K*deltaTemp;
+    const coldSideHeatRatePeltier = I*barSeebeck*(Tc-tau*deltaTemp);
+    const coldSideHeatRateJoule = +0.5*I*I*R*(1-beta);
+    const coldSideHeatRate = coldSideHeatRateDiffusion + coldSideHeatRatePeltier + coldSideHeatRateJoule;
+    const alphaBar = barSeebeck;
+    const rhoBar = adaptiveSimpson((x)=>dimlessSimParam.funcElecResi(dimlessTempFunc(x)), 0.0, dimlessSimParam.length, dimlessSimParam.integralEps) * simParam.refElecResi;
+    const kappaBar = simParam.refThrmCond / adaptiveSimpson((x)=>(1/dimlessSimParam.funcThrmCond(dimlessTempFunc(x))), 0.0, dimlessSimParam.length, dimlessSimParam.integralEps);
+
+    return {'power': power, 'efficiency': power/hotSideHeatRate, 'hotSideHeatRate': hotSideHeatRate,
+            'I': I, 'R': R, 'K': K, 'Vgen': Vgen, 'gamma': Vgen/(I*R)-1, 'V': Vgen-I*R,
+            'hotSideHeatRateDiffusion': hotSideHeatRateDiffusion, 'hotSideHeatRatePeltier': hotSideHeatRatePeltier, 'hotSideHeatRateJoule': hotSideHeatRateJoule,
+            'coldSideHeatRateDiffusion': coldSideHeatRateDiffusion, 'coldSideHeatRatePeltier': coldSideHeatRatePeltier, 'coldSideHeatRateJoule': coldSideHeatRateJoule,
+            'coldSideHeatRate': coldSideHeatRate,
+            'alphaBar': alphaBar, 'rhoBar': rhoBar, 'kappaBar': kappaBar,
+            'Zgen': alphaBar*alphaBar/(rhoBar*kappaBar), 'tau': tau, 'beta': beta, 'deltaTemp': deltaTemp,
+            'hidden1': tau/deltaTemp, 'hidden2': beta/deltaTemp,
+        };
 };
 
 function getIntegralTeqnRhs(chebyshevNodesVec, tempVec, J) {
@@ -1357,24 +1513,49 @@ function getSolverFunc() {
 
 function resetBeforeRunSimulation() {
     // clear previous results
-    simWindow.chartCurrentVsPower.clearChart();
-    simWindow.chartCurrentVsEfficiency.clearChart();
+    if(simWindow.isSimResultDrawn) {
+        simWindow.chartCurrentVsPower.clearChart();
+        simWindow.chartCurrentVsEfficiency.clearChart();    
+    }
     simWindow.isSimResultDrawn = false;
+    if(simWindow.isPerformTableDrawn) {
+        simWindow.tablePerformByCurrent.clearData();
+        simWindow.tablePerformReport.clearData();
+    }
+    simWindow.tabledataPerformByCurrent = [];
+    simWindow.performAtOpenCircuit = null;
+    simWindow.performAtMaxPower = null;
+    simWindow.performAtMaxEfficiency = null;
+    simWindow.performArray = [];
+    simWindow.isPerformTableDrawn = false;
+
     $("#report-list").html(`<li>I<sub>Ref</sub>=${simParam.refI} [A]</li>`);
 };
 
-function reportSimResults(J, tegPerformance) {
+function reportSimResults(J, tegPerformance, id=null) {
     var prevHtml = $("#report-list").html();
-    const resultHtml = `<li>I/I<sub>Ref</sub>=${J} [1], P=${tegPerformance.power} [W], Q<sub>h</sub>=${tegPerformance.hotSideHeatRate} [W] &eta;=${tegPerformance.power/tegPerformance.hotSideHeatRate} [1]</li>`;
+    const efficiency = tegPerformance.power/tegPerformance.hotSideHeatRate;
+    const resultHtml = `<li>I/I<sub>Ref</sub>=${J} [1], P=${tegPerformance.power} [W], Q<sub>h</sub>=${tegPerformance.hotSideHeatRate} [W] &eta;=${efficiency} [1]</li>`;
     $("#report-list").html(prevHtml + resultHtml);
+
+    if(id !== null) {
+        simWindow.tabledataPerformByCurrent.push({
+            id: id, current: (J*simParam.refI).toExponential(simWindow.numPerformTableDigits),
+            power: tegPerformance.power.toExponential(simWindow.numPerformTableDigits), 
+            efficiency: efficiency.toExponential(simWindow.numPerformTableDigits), 
+            hotSideHeatRate: tegPerformance.hotSideHeatRate.toExponential(simWindow.numPerformTableDigits),
+        });
+    };
 };
 
 async function runSimulation() {
     const chebyshevXVec = getChebyshevNodes(dimlessSimParam.numSolChebyshevNodes, 0.0, 1.0);
-    const meshXVec = getLinearSpace(0, dimlessSimParam.length, simWindow.numMinMeshPoints);
     const numCurrentChebyshevNodes = dimlessSimParam.numCurrentChebyshevNodes;
     const dJ = 0.05;
 
+    disableAllButtons();
+    $("#report-list").show();
+    $(".table-performance").hide();
     resetBeforeRunSimulation();
 
     // set a solver
@@ -1387,6 +1568,7 @@ async function runSimulation() {
     // for the case when simulation failed
     function simFailed() {
         printSimTaskMessage("Simulation Failed!");
+        enableAllButtons();
         return;
     }
 
@@ -1457,21 +1639,26 @@ async function runSimulation() {
             const hotSideHeatRateVec = new Float64Array(numCurrentChebyshevNodes);
             var J;
             var res;
-            var yVec;
+            var yVec, L2Error;
+            var maxL2Error = -Infinity;
             var tegPerformance;
+            dimlessSimParam.tempVecArray = [];
 
             for(let i=0; i<numCurrentChebyshevNodes; i++) {
                 J = refCurrentVec[i];
                 if(i==0) {  // already computed
                     yVec = resAtInitialCurrent.sol;
+                    L2Error = resAtInitialCurrent.L2Error;
                 }
                 else if(i==numCurrentChebyshevNodes-1) {  // already computed
                     yVec = resAtFinalCurrent.sol;
+                    L2Error = resAtFinalCurrent.L2Error;
                 }
                 else {
                     res = await solveTeqn(J);
                     if(res.success) {
                         yVec = res.sol;
+                        L2Error = res.L2Error;
                     }
                     else {
                         window.alert("Seriously wrong: Computation at an interior ref. current failed!");
@@ -1479,23 +1666,91 @@ async function runSimulation() {
                         return;
                     }
                 }
+                // compute performance
                 tegPerformance = getTegPerformance(chebyshevXVec, yVec, J);
                 powerVec[i] = tegPerformance.power;
                 hotSideHeatRateVec[i] = tegPerformance.hotSideHeatRate;
-                reportSimResults(J, tegPerformance);
+                reportSimResults(J, tegPerformance, i+1); // write the performance results
+                simWindow.performArray.push(tegPerformance);  // keep performance to reuse for open circuit.
+                dimlessSimParam.tempVecArray.push(yVec); // keep temperature distributions in case a user wants to save them as a file.
+                // compute max. L2-Error
+                maxL2Error = Math.max(maxL2Error, L2Error);
             }
-            resolve({refCurrentVec: refCurrentVec, powerVec: powerVec, hotSideHeatRateVec: hotSideHeatRateVec});
+            dimlessSimParam.refCurrentVec = refCurrentVec;
+            dimlessSimParam.powerVec = powerVec;
+            dimlessSimParam.hotSideHeatRateVec = hotSideHeatRateVec;
+            resolve({maxL2Error: maxL2Error, resAtInitialCurrent: resAtInitialCurrent,});
         });
-    }).then(function(values) {
-        dimlessSimParam.refCurrentVec = values.refCurrentVec;
-        const powerVec = values.powerVec;
-        const hotSideHeatRateVec = values.hotSideHeatRateVec;
-        // draw I-power curve and I-efficiency curve
-        simParam.funcPower = getPolyChebyshevFuncFromChebyshevNodes(dimlessSimParam.refCurrentVec, powerVec);
-        simParam.funcHotSideHeatRate = getPolyChebyshevFuncFromChebyshevNodes(dimlessSimParam.refCurrentVec, hotSideHeatRateVec);
+    }).then(async function(values) {
+        const refCurrentVec = dimlessSimParam.refCurrentVec;
+        const powerVec = dimlessSimParam.powerVec;
+        const hotSideHeatRateVec = dimlessSimParam.hotSideHeatRateVec;
+        const maxL2Error = values.maxL2Error;
+        const initialRefCurrent = refCurrentVec[0];
+        const finalRefCurrent = refCurrentVec[refCurrentVec.length-1];
+        const chebyshevXVec = getChebyshevNodes(dimlessSimParam.numSolChebyshevNodes, 0.0, 1.0);
+        var isPostProcessingFailed = false;
 
+        // draw I-power curve and I-efficiency curve
+        simParam.funcPower = getPolyChebyshevFuncFromChebyshevNodes(refCurrentVec, powerVec);
+        simParam.funcHotSideHeatRate = getPolyChebyshevFuncFromChebyshevNodes(refCurrentVec, hotSideHeatRateVec);
         drawSimResults();
         simWindow.isSimResultDrawn = true;
+
+        // ------------- post-processing -------------
+        // open circuit voltage
+        const idxOpenCircuitCurrent = refCurrentVec.findIndex((element) => (element===0.0));
+        if(idxOpenCircuitCurrent >= 0) {
+            simWindow.performAtOpenCircuit = simWindow.performArray[idxOpenCircuitCurrent];
+        } else {
+            const JAtOpenCircuit = 0.0;
+            const resAtOpenCircuit = await solveTeqn(JAtOpenCircuit);
+            if(resAtOpenCircuit.success) {
+                simWindow.performAtOpenCircuit = getTegPerformance(chebyshevXVec, resAtOpenCircuit.sol, JAtOpenCircuit);
+            } else {
+                isPostProcessingFailed = true;
+            }
+        }
+        // find max. power
+        if(!isPostProcessingFailed) {
+            const JAtMaxPower = await minimizer.powellsMethod((J)=>(-simParam.funcPower(J)), [0.5], 
+                {'bounds': [[initialRefCurrent, finalRefCurrent]], 'maxIter': dimlessSimParam.numMaxIteration,
+                 'absTolerance': dimlessSimParam.solverTol, 'tolerance': 1e-8, 'lineTolerance': 1e-8, 'verbose': true, });
+            console.log("JAtMaxPower=", JAtMaxPower);
+            const resAtMaxPower = await solveTeqn(JAtMaxPower);
+            if(resAtMaxPower.success) {
+                simWindow.performAtMaxPower = getTegPerformance(chebyshevXVec, resAtMaxPower.sol, JAtMaxPower);
+            } else {
+                isPostProcessingFailed = true;
+            }
+        }
+        // find max. efficiency
+        if(!isPostProcessingFailed) {
+            const JAtMaxEfficiency = await minimizer.powellsMethod((J)=>(-simParam.funcPower(J)/simParam.funcHotSideHeatRate(J)), [0.5], 
+                {'bounds': [[initialRefCurrent, finalRefCurrent]], 'maxIter': dimlessSimParam.numMaxIteration,
+                'absTolerance': dimlessSimParam.solverTol, 'tolerance': 1e-8, 'lineTolerance': 1e-8, 'verbose': true, });
+            console.log("JAtMaxEfficiency=", JAtMaxEfficiency);
+            const resAtMaxEfficiency = await solveTeqn(JAtMaxEfficiency);
+            if(resAtMaxEfficiency.success) {
+                simWindow.performAtMaxEfficiency = getTegPerformance(chebyshevXVec, resAtMaxEfficiency.sol, JAtMaxEfficiency);
+            } else {
+                isPostProcessingFailed = true;
+            }
+        }
+        
+        if(!isPostProcessingFailed) {
+            $("#report-list").hide();
+            $(".table-performance").show();
+            drawPerformTables();
+            simWindow.isPerformTableDrawn = true;
+        }
+
+        // simulation is complete.
+        simWindow.simTaskName = `Simulation complete`;
+        printSimTaskMessage(`Estimated L<sup>2</sup>-error=${maxL2Error.toExponential(3)}`);
+        console.log("Simulation complete.");
+
+        enableAllButtons();
     })
     .catch(simFailed);
 };

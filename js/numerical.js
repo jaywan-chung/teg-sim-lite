@@ -61,7 +61,7 @@ function getL2Error(vec1, vec2) {
  * @return {Number} result.
  */
 function evalPoly(coefVec, point) {
-    result = 0.0;
+    var result = 0.0;
     for(let coef of coefVec) {
         result = result * point + coef;
     };
@@ -215,24 +215,21 @@ function getPolyRegressFunc(degPoly, dataRows, costScale=1.0) {
         };
         return cost * costScale;
     };
-    var grdFunc = function(coefVec) {
-        var grdVec = new Float64Array(degPoly+1);
-        var xValue, yValue;
-        var sumValue;
-        for(let row of dataRows) {
-            xValue = row[0];
-            yValue = row[1];
-            for(let i=0; i<degPoly+1; i++) {
-                grdVec[i] += (evalPoly(coefVec, xValue/xAvg) - yValue)*Math.pow(xValue/xAvg, degPoly-i)/(yL2Sum+1e-16)*2 * costScale;
-            }
-        };
-        return grdVec;
-    };
+    // var grdFunc = function(coefVec) {
+    //     var grdVec = new Float64Array(degPoly+1);
+    //     var xValue, yValue;
+    //     var sumValue;
+    //     for(let row of dataRows) {
+    //         xValue = row[0];
+    //         yValue = row[1];
+    //         for(let i=0; i<degPoly+1; i++) {
+    //             grdVec[i] += (evalPoly(coefVec, xValue/xAvg) - yValue)*Math.pow(xValue/xAvg, degPoly-i)/(yL2Sum+1e-16)*2 * costScale;
+    //         }
+    //     };
+    //     return grdVec;
+    // };
         
     // Powell method can be applied to zero order unconstrained optimization
-    //var solution = optimjs.minimize_Powell(costFunc, coefVec0);  // return 'argument' and 'fncvalue'.
-    // solution = optimjs.minimize_L_BFGS(costFunc, grdFunc, coefVec0);  // return 'argument' and 'fncvalue'.
-    // coefVec = solution.argument;
     coefVec = minimizer.powellsMethod(costFunc, coefVec0, {maxIter: 500, tol: 1e-8, verbose: false});
 
     const polyRegressFunc = function(x) {

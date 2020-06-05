@@ -34,15 +34,19 @@ section.default-hidden {
 }
 .menu {
     background: var(--main-color);
-    padding-top: 10px;
+    padding-top: 0px;
     padding-bottom: 3px;
 }
 .menu .container {
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
     max-width: var(--large-width);
     margin-left: auto;
     margin-right: auto;
+}
+.menu .menu-item {
+    margin-top: 10px;
 }
 .menu .menu-item input[type=radio] {
     display: none;

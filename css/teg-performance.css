@@ -49,7 +49,7 @@
     margin-left: 20px;
     margin-right: 20px;
 }
-.section .container article.table{
+.section .container article.tep-table{
     flex: 0 0 30%;
     margin: 10px;
 }
@@ -64,6 +64,17 @@
     margin-top: 10px;
     margin-bottom: 10px;
 }
+.subtitle-print {
+    display: none;
+    flex-wrap: wrap;
+    justify-content: left;
+    color: var(--main-color);
+    font-size: 1.5rem;
+    margin-left: 30px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
 
 .table {
     margin-left: 0px;
@@ -161,11 +172,45 @@ form .simul-param-long-label {
     margin-right: 5px;
 }
 
+.selection-button {
+    text-decoration: none;
+    background-color: var(--accent-color);
+    color: var(--dark-main-color);
+    padding: 5px;
+    border-radius: 5px;
+    margin-right: 30px;
+}
+.selection-button:hover {
+    background-color: var(--dark-accent-color);
+    cursor: pointer;
+}
+.selection-button:disabled {
+    background-color: #808080;
+    cursor: default;
+}
+
 @media (max-width: 768px) {
     .title h1 {
         font-size: 2rem;
     }
     .apps .text p {
         display: none;
+    }
+}
+
+@media print {
+    .subtitle { display: none; }
+    .subtitle-print {display: block; }
+    .pagebreak { page-break-before: always; } /* page-break-after works, as well */
+    .header { display: none; }
+    .input-tep { display: none; }
+    .tep-curve .paragraph { display: none; }
+    .select-sim-param .paragraph { display: none; }
+    .sim-result .paragraph { display: none; }
+    #sim-task-message { display: none; }
+    .button-container { display: none; }
+    .footer .footer-keri-info { padding-top: 20px;}
+    .chart-container article.chart {
+        break-after: always;
     }
 }

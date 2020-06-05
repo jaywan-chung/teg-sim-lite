@@ -410,7 +410,9 @@ function changeSolverOptionForms() {
             <option value="1e-5">1e-5 (Fast)</option>
             <option value="1e-6">1e-6</option>
             <option value="1e-7">1e-7</option>
-            <option value="1e-8">1e-8 (Accurate)</option>
+            <option value="1e-8">1e-8</option>
+            <option value="1e-9">1e-9</option>
+            <option value="1e-10">1e-10 (Accurate)</option>
             `);
         $("#select-solver-tol").val("1e-8");
     }
@@ -926,27 +928,7 @@ function getSelectTepMethodSuboptionId(tepName) {
 };
 
 function drawPerformTables() {
-    //define some sample data
-    // const tabledataPerformByCurrent = [
-    //     {id:1, current: 0*simParam.refI, power: 0, efficiency: 0, hotSideHeatRate: 1.826258350136605,},
-    //     {id:2, current: 0.024471741852423234*simParam.refI, power: 0.003958486016628933, efficiency: 0.0021591520790648694, hotSideHeatRate: 1.8333521084551658,},
-    //     {id:3, current: 0.09549150281252627*simParam.refI, power: 0.014321700716581906, efficiency: 0.007727485673469251, hotSideHeatRate: 1.8533454893035326,},
-    //     {id:4, current: 0.20610737385376343*simParam.refI, power: 0.027128957594365875, efficiency: 0.014409373477990296, hotSideHeatRate: 1.8827298519123126,},
-    //     {id:5, current: 0.3454915028125263*simParam.refI, power: 0.037479054319066986, efficiency: 0.019553776525772247, hotSideHeatRate: 1.916716920113559,},
-    //     {id:6, current: 0.49999999999999994*simParam.refI, power: 0.04139632469355911, efficiency: 0.021224078451195727, hotSideHeatRate: 1.950441560454509,},
-    //     {id:7, current: 0.6545084971874737*simParam.refI, power: 0.03734874094702167, efficiency: 0.018862758935176537, hotSideHeatRate: 1.9800253544761806,},
-    //     {id:8, current: 0.7938926261462365*simParam.refI, power: 0.026843048704439886, efficiency: 0.013400269868632967, hotSideHeatRate: 2.003172247095818,},
-    //     {id:9, current: 0.9045084971874737*simParam.refI, power: 0.01386415786673019, efficiency: 0.006866302819344655, hotSideHeatRate: 2.0191591066549313,},
-    //     {id:10, current: 0.9755282581475768*simParam.refI, power: 0.003360378600838312, efficiency: 0.0016567340460761524, hotSideHeatRate: 2.0283150508055963,},
-    //     {id:11, current: 1*simParam.refI, power: -0.0006529285412627917, efficiency: -0.00032143863323646, hotSideHeatRate: 2.0312696538330464,},
-    // ];
-    // const tabledataPerformReport = [
-    //     {parameterName: "I [A]", groupName: "Device performance", openCircuit: 0, maxPower: 0.49999999999999994*simParam.refI, maxEfficiency: 0.6545084971874737*simParam.refI,},
-    //     {parameterName: "I [A]", groupName: "Device performance", openCircuit: 0, maxPower: 0.49999999999999994*simParam.refI, maxEfficiency: 0.6545084971874737*simParam.refI,},
-    //     {parameterName: "I [A]", groupName: "Device performance", openCircuit: 0, maxPower: 0.49999999999999994*simParam.refI, maxEfficiency: 0.6545084971874737*simParam.refI,},
-    //     {parameterName: "Q<sub>h</sub> [W]", groupName: "Heat rate", openCircuit: 0, maxPower: 0.49999999999999994*simParam.refI, maxEfficiency: 0.6545084971874737*simParam.refI,},
-    //     {parameterName: "Q<sub>h</sub> [W]", groupName: "Heat rate", openCircuit: 0, maxPower: 0.49999999999999994*simParam.refI, maxEfficiency: 0.6545084971874737*simParam.refI,},
-    // ];
+    const N = simParam.numLegs;
 
     function toExponentialFormatter (cell, formatterParams, onRendered){
         //cell - the cell component
@@ -965,12 +947,10 @@ function drawPerformTables() {
     };    
 
     simWindow.tablePerformByCurrent = new Tabulator("#table-perform-by-current", {
-        // height: simParam.numCurrentChebyshevNodes*10 + 50,
         data: simWindow.tabledataPerformByCurrent,
         resizableColumns: false,
         selectable: "highlight",
-        clipboard: true,
-        clipboardPasteAction: "replace",
+        clipboard: "copy",
         // layout: "fitColumns", //fit columns to width of table (optional)
         columns: [ //Define Table Columns
             {title:"No.", field:"id", width: 60, hozAlign:"center", sorter:"number",},
@@ -984,20 +964,20 @@ function drawPerformTables() {
     var tabledataPerformReport = [
         {parameterName: "I [A]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.I, maxPower: simWindow.performAtMaxPower.I, maxEfficiency: simWindow.performAtMaxEfficiency.I,},
         {parameterName: "R<sub>L</sub>/R [1]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.gamma, maxPower: simWindow.performAtMaxPower.gamma, maxEfficiency: simWindow.performAtMaxEfficiency.gamma,},
-        {parameterName: "V=V<sub>gen</sub>-IR [V]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.V, maxPower: simWindow.performAtMaxPower.V, maxEfficiency: simWindow.performAtMaxEfficiency.V,},
-        {parameterName: "Power [W]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.power, maxPower: simWindow.performAtMaxPower.power, maxEfficiency: simWindow.performAtMaxEfficiency.power,},
+        {parameterName: "V=V<sub>gen</sub>-IR [V]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.V * N, maxPower: simWindow.performAtMaxPower.V * N, maxEfficiency: simWindow.performAtMaxEfficiency.V * N,},
+        {parameterName: "Power [W]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.power * N, maxPower: simWindow.performAtMaxPower.power * N, maxEfficiency: simWindow.performAtMaxEfficiency.power * N,},
         {parameterName: "Efficiency [1]", groupName: "Device performance", openCircuit: simWindow.performAtOpenCircuit.efficiency, maxPower: simWindow.performAtMaxPower.efficiency, maxEfficiency: simWindow.performAtMaxEfficiency.efficiency,},
-        {parameterName: "Total Q<sub>h</sub> [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRate, maxPower: simWindow.performAtMaxPower.hotSideHeatRate, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRate,},
-        {parameterName: "Diffusion [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRateDiffusion, maxPower: simWindow.performAtMaxPower.hotSideHeatRateDiffusion, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRateDiffusion,},
-        {parameterName: "Peltier [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRatePeltier, maxPower: simWindow.performAtMaxPower.hotSideHeatRatePeltier, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRatePeltier,},
-        {parameterName: "Joule [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRateJoule, maxPower: simWindow.performAtMaxPower.hotSideHeatRateJoule, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRateJoule,},
-        {parameterName: "Total Q<sub>c</sub> [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRate, maxPower: simWindow.performAtMaxPower.coldSideHeatRate, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRate,},
-        {parameterName: "Diffusion [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRateDiffusion, maxPower: simWindow.performAtMaxPower.coldSideHeatRateDiffusion, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRateDiffusion,},
-        {parameterName: "Peltier [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRatePeltier, maxPower: simWindow.performAtMaxPower.coldSideHeatRatePeltier, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRatePeltier,},
-        {parameterName: "Joule [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRateJoule, maxPower: simWindow.performAtMaxPower.coldSideHeatRateJoule, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRateJoule,},
-        {parameterName: "V<sub>gen</sub> [V]", groupName: "Device parameter", openCircuit: simWindow.performAtOpenCircuit.Vgen, maxPower: simWindow.performAtMaxPower.Vgen, maxEfficiency: simWindow.performAtMaxEfficiency.Vgen,},
-        {parameterName: "R inside leg [Ω]", groupName: "Device parameter", openCircuit: simWindow.performAtOpenCircuit.R, maxPower: simWindow.performAtMaxPower.R, maxEfficiency: simWindow.performAtMaxEfficiency.R,},
-        {parameterName: "K inside leg [W]", groupName: "Device parameter", openCircuit: simWindow.performAtOpenCircuit.K, maxPower: simWindow.performAtMaxPower.K, maxEfficiency: simWindow.performAtMaxEfficiency.K,},
+        {parameterName: "Total Q<sub>h</sub> [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRate * N, maxPower: simWindow.performAtMaxPower.hotSideHeatRate * N, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRate * N,},
+        {parameterName: "Diffusion [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRateDiffusion * N, maxPower: simWindow.performAtMaxPower.hotSideHeatRateDiffusion * N, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRateDiffusion * N,},
+        {parameterName: "Peltier [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRatePeltier * N, maxPower: simWindow.performAtMaxPower.hotSideHeatRatePeltier * N, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRatePeltier * N,},
+        {parameterName: "Joule [W]", groupName: "Hot-side heat rate", openCircuit: simWindow.performAtOpenCircuit.hotSideHeatRateJoule * N, maxPower: simWindow.performAtMaxPower.hotSideHeatRateJoule * N, maxEfficiency: simWindow.performAtMaxEfficiency.hotSideHeatRateJoule * N,},
+        {parameterName: "Total Q<sub>c</sub> [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRate * N, maxPower: simWindow.performAtMaxPower.coldSideHeatRate * N, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRate * N,},
+        {parameterName: "Diffusion [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRateDiffusion * N, maxPower: simWindow.performAtMaxPower.coldSideHeatRateDiffusion * N, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRateDiffusion * N,},
+        {parameterName: "Peltier [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRatePeltier * N, maxPower: simWindow.performAtMaxPower.coldSideHeatRatePeltier * N, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRatePeltier * N,},
+        {parameterName: "Joule [W]", groupName: "Cold-side heat rate", openCircuit: simWindow.performAtOpenCircuit.coldSideHeatRateJoule * N, maxPower: simWindow.performAtMaxPower.coldSideHeatRateJoule * N, maxEfficiency: simWindow.performAtMaxEfficiency.coldSideHeatRateJoule * N,},
+        {parameterName: "V<sub>gen</sub> [V]", groupName: "Device parameter", openCircuit: simWindow.performAtOpenCircuit.Vgen * N, maxPower: simWindow.performAtMaxPower.Vgen * N, maxEfficiency: simWindow.performAtMaxEfficiency.Vgen * N,},
+        {parameterName: "R inside module [Ω]", groupName: "Device parameter", openCircuit: simWindow.performAtOpenCircuit.R * N, maxPower: simWindow.performAtMaxPower.R * N, maxEfficiency: simWindow.performAtMaxEfficiency.R * N,},
+        {parameterName: "K inside module [W]", groupName: "Device parameter", openCircuit: simWindow.performAtOpenCircuit.K * N, maxPower: simWindow.performAtMaxPower.K * N, maxEfficiency: simWindow.performAtMaxEfficiency.K * N,},
         {parameterName: "<SPAN STYLE='text-decoration:overline'>&alpha;</SPAN> [V]", groupName: "Average parameter", openCircuit: simWindow.performAtOpenCircuit.alphaBar, maxPower: simWindow.performAtMaxPower.alphaBar, maxEfficiency: simWindow.performAtMaxEfficiency.alphaBar,},
         {parameterName: "<SPAN STYLE='text-decoration:overline'>&rho;</SPAN> [Ω m]", groupName: "Average parameter", openCircuit: simWindow.performAtOpenCircuit.rhoBar, maxPower: simWindow.performAtMaxPower.rhoBar, maxEfficiency: simWindow.performAtMaxEfficiency.rhoBar,},
         {parameterName: "<SPAN STYLE='text-decoration:overline'>&kappa;</SPAN> [W/m/K]", groupName: "Average parameter", openCircuit: simWindow.performAtOpenCircuit.kappaBar, maxPower: simWindow.performAtMaxPower.kappaBar, maxEfficiency: simWindow.performAtMaxEfficiency.kappaBar,},
@@ -1007,12 +987,10 @@ function drawPerformTables() {
     ];
 
     simWindow.tablePerformReport = new Tabulator("#table-perform-report", {
-        // height: (tabledataPerformReport.length+6)*10 + 50,
         data: tabledataPerformReport,
         resizableColumns: false,
         selectable: "highlight",
-        clipboard: true,
-        clipboardPasteAction: "replace",
+        clipboard: "copy",
         groupBy: "groupName",
         groupHeader: function(value, count, data, group){
             //value - the value all members of this group share
@@ -1026,8 +1004,8 @@ function drawPerformTables() {
         //layout: "fitColumns", //fit columns to width of table (optional)
         columns: [
             {title:"Parameter", field:"parameterName", width: 150, hozAlign: "center", formatter: "html", headerSort: false,},
-            {title:"Group name", field:"groupName", visible: false, width: 150, hozAlign: "center", headerSort: false,},
-            {title:"Open circuit", field:"openCircuit", width: 150, hozAlign: "center", formatter: toExponentialFormatter, headerSort: false,},
+            {title:"Group Name", field:"groupName", visible: false, width: 150, hozAlign: "center", headerSort: false,},
+            {title:"Open Circuit", field:"openCircuit", width: 150, hozAlign: "center", formatter: toExponentialFormatter, headerSort: false,},
             {title:"Max. Power", field:"maxPower", width: 150, hozAlign: "center", formatter: toExponentialFormatter, headerSort: false,},
             {title:"Max. Efficiency", field:"maxEfficiency", width: 150, hozAlign: "center", formatter: toExponentialFormatter, headerSort: false,},
         ],
@@ -1068,6 +1046,33 @@ function initTepTables() {
         [tabledataSeebeck, tabledataElecResi, tabledataThrmCond] = getTestRealisticTabledata();
     };
 
+    function tepTableClipboardPasteParser(firstField, secondField) {
+        return function pasteParser(clipboard) {
+        //turn clipboard data into array
+        const rows = clipboard.split("\n");
+        const numRows = rows.length;
+        var clipboardArray = [];
+        var clipboardArrayItem;
+        var cols;
+        for(let row of rows) {
+            cols = row.split("\t");
+            if(cols.length < 2) {
+                if(numRows === 1) {
+                    return;  // invalid clipboard data
+                }
+                break;
+            }
+            if(isFinite(cols[0]) && isFinite(cols[1])) {
+                clipboardArrayItem = {};
+                clipboardArrayItem[firstField] = cols[0];
+                clipboardArrayItem[secondField] = cols[1];
+                clipboardArray.push(clipboardArrayItem);    
+            }
+        }
+        return clipboardArray; //return array
+        };
+    }    
+
     var tableSeebeck = new Tabulator("#tep-table-seebeck", {
         height: "250px",
         data: tabledataSeebeck,
@@ -1075,9 +1080,10 @@ function initTepTables() {
         selectable: "highlight",
         clipboard: true,
         clipboardPasteAction: "replace",
+        clipboardPasteParser: tepTableClipboardPasteParser("temperature", "seebeck"),
         // layout: "fitColumns", //fit columns to width of table (optional)
         columns: [ //Define Table Columns
-            {formatter:"rowSelection", titleFormatter:"rowSelection", width: rowSelectionColumnWidth, hozAlign:"center", headerSort:false},
+            {formatter:"rowSelection", titleFormatter:"rowSelection", width: rowSelectionColumnWidth, hozAlign:"center", headerSort:false, clipboard:false,},
             {title:"Temp. [K]", field:"temperature", width: tempColumnWidth, hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
             {title:"[V/K]", field:"seebeck", width: propertyColumnWidth, hozAlign:"center", sorter:"number", validator:"numeric", editor:true},
         ],
@@ -1090,9 +1096,10 @@ function initTepTables() {
         selectable: "highlight",
         clipboard: true,
         clipboardPasteAction: "replace",
+        clipboardPasteParser: tepTableClipboardPasteParser("temperature", "elecResi"),
         //layout: "fitColumns", //fit columns to width of table (optional)
         columns: [
-            {formatter:"rowSelection", titleFormatter:"rowSelection", width: rowSelectionColumnWidth, hozAlign:"center", headerSort:false},
+            {formatter:"rowSelection", titleFormatter:"rowSelection", width: rowSelectionColumnWidth, hozAlign:"center", headerSort:false, clipboard:false,},
             {title:"Temp. [K]", field:"temperature", width: tempColumnWidth, hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
             {title:"[Ω m]", field:"elecResi", width: propertyColumnWidth, hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
         ],
@@ -1105,9 +1112,10 @@ function initTepTables() {
         selectable: "highlight",
         clipboard: true,
         clipboardPasteAction: "replace",
+        clipboardPasteParser: tepTableClipboardPasteParser("temperature", "thrmCond"),
         //layout: "fitColumns", //fit columns to width of table (optional)
         columns: [
-            {formatter:"rowSelection", titleFormatter:"rowSelection", width: rowSelectionColumnWidth, hozAlign:"center", headerSort:false},
+            {formatter:"rowSelection", titleFormatter:"rowSelection", width: rowSelectionColumnWidth, hozAlign:"center", headerSort:false, clipboard:false,},
             {title:"Temp. [K]", field:"temperature", width: tempColumnWidth, hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
             {title:"[W/m/K]", field:"thrmCond", width: propertyColumnWidth, hozAlign:"center", sorter:"number", validator:"min:0", editor:true},
         ],
@@ -1534,16 +1542,18 @@ function resetBeforeRunSimulation() {
 
 function reportSimResults(J, tegPerformance, id=null) {
     var prevHtml = $("#report-list").html();
+    const power = tegPerformance.power * simParam.numLegs;
     const efficiency = tegPerformance.power/tegPerformance.hotSideHeatRate;
-    const resultHtml = `<li>I/I<sub>Ref</sub>=${J} [1], P=${tegPerformance.power} [W], Q<sub>h</sub>=${tegPerformance.hotSideHeatRate} [W] &eta;=${efficiency} [1]</li>`;
+    const hotSideHeatRate = tegPerformance.hotSideHeatRate * simParam.numLegs;
+    const resultHtml = `<li>I/I<sub>Ref</sub>=${J} [1], P=${power} [W], &eta;=${efficiency} [1], Q<sub>h</sub>=${hotSideHeatRate} [W]</li>`;
     $("#report-list").html(prevHtml + resultHtml);
 
     if(id !== null) {
         simWindow.tabledataPerformByCurrent.push({
             id: id, current: (J*simParam.refI).toExponential(simWindow.numPerformTableDigits),
-            power: tegPerformance.power.toExponential(simWindow.numPerformTableDigits), 
+            power: power.toExponential(simWindow.numPerformTableDigits), 
             efficiency: efficiency.toExponential(simWindow.numPerformTableDigits), 
-            hotSideHeatRate: tegPerformance.hotSideHeatRate.toExponential(simWindow.numPerformTableDigits),
+            hotSideHeatRate: hotSideHeatRate.toExponential(simWindow.numPerformTableDigits),
         });
     };
 };

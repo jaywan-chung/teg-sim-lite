@@ -65,14 +65,18 @@ section.default-hidden {
 }
 .menu .menu-item label {
     font-size: 1.5rem;
-    background: linear-gradient(var(--accent-color), white);
+    background: var(--accent-color);
+    background: white;    
+    background: linear-gradient(var(--accent-color), white);    
     color: var(--text-color);
     color: var(--dark-main-color);
     text-shadow: 2px 2px 4px var(--dark-gray);
+    text-shadow: none;
     border-top-left-radius: 10px;
     border-top-right-radius: 10px;
     padding-top: 5px;
     padding-bottom: 5px;
+    padding-bottom: 4px;
     padding-left: 10px;
     padding-right: 10px;
     opacity: 0.3;
@@ -129,9 +133,12 @@ h3 {
     display: block;
     box-sizing: border-box;
     height: 100%;
+    border: solid 2px var(--accent-color);
     border: solid 2px var(--main-color);
     border-radius: 30px;
+    border-radius: 15px;
     box-shadow: 5px 5px var(--dark-accent-color);
+    box-shadow: none;
     color: inherit;
     text-decoration: none;
     padding: 20px;

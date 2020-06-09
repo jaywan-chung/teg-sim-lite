@@ -21,6 +21,7 @@
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/1.12.4/jquery.js"></script>
     <script type="text/javascript" src="lib/js/tabulator.min.js"></script>
     <script type="text/javascript" src="lib/js/minimizer-async.js"></script>
+    <script type="text/javascript" src="lib/js/FileSaver.min.js"></script>
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script src="js/numerical.js"></script>
     <script src="js/teg-performance.js"></script>
@@ -42,7 +43,7 @@
 
     <section class="title">
         <div class="container">
-            <h1>Thermoelectric Power Generation<br/>Web Simulator Lite ver.0.52a</h1>
+            <h1>Thermoelectric Power Generation<br/>Web Simulator Lite ver.0.53a</h1>
         </div>
     </section>
 
@@ -53,7 +54,7 @@
         <h2 class="subtitle">Step 1: Input Thermoelectric Properties</h2>
         <p class="paragraph">
             You can directly edit the table or paste (Ctrl+V) spreadsheet (excel) data into the table.
-            Click the target table when you paste something.
+            Click the gray area of target table when you paste something.
             Be careful as pasting will replace the entire table.
         </p>
         <div class="container">
@@ -156,6 +157,10 @@
                 <div id="chart-figure-of-merit"></div>
             </article>
         </div>
+        <div class="button-container">
+            <button type="button" class="selection-button" id="copy-formula">Copy to Clipboard</button>
+        </div>
+        <div id="tep-table-copy-formula"></div>
     </section>
 
     <div class="pagebreak"> </div>
@@ -257,6 +262,11 @@
         <div class="container">
             <ul id="report-list"></ul>
         </div>
+        <div class="button-container">
+            <button type="button" class="selection-button" id="copy-current-vs-performance">Copy to Clipboard</button>
+        </div>
+        <div id="table-copy-current-vs-performance"></div>
+
         <div class="container">
             <article class="table table-performance">
                 <h3 class="table-title">Performance at each current</h3>
@@ -269,6 +279,11 @@
                 <div id="table-perform-report"></div>
             </article>
         </div>
+        <div class="button-container" style="margin-top: 30px;">
+            <button type="button" class="selection-button" id="copy-perform-report">Copy Report to Clipboard</button>
+            <button type="button" class="selection-button" id="copy-temp-distribution">Copy Temp. Distribution to Clipboard</button>
+        </div>
+        <div id="table-copy-temp-distribution"></div>
     </section>
 
     <section class="section test" id="test-section">

@@ -228,8 +228,8 @@
                     <li><a href="http://tabulator.info/" target="_blank">Tabulator</a> v4.6: Tables</li>
                     <li><a href="https://developers.google.com/chart/" target="_blank">Google Charts</a>: Graphs</li>
                     <li><a href="https://github.com/rreusser/minimize-powell/" target="_blank">minimize-powell</a> and <a href="https://github.com/scijs/minimize-golden-section-1d" target="_blank">minimize-golden-section-1d</a> by Ricky Reusser: Optimization; polynomial regression and nonlinear solver</li>
-                    <li><a href="https://smashicons.com/" title="Smashicons">Smashicons</a> from <a href="https://www.flaticon.com/" title="Flaticon"> www.flaticon.com</a>: <em>User</em> icon</li>
-                    
+                    <li><a href="https://smashicons.com/" target="_blank" title="Smashicons">Smashicons</a> from <a href="https://www.flaticon.com/" target="_blank" title="Flaticon"> www.flaticon.com</a>: <em>User</em> icon</li>
+                    <li><a href="https://github.com/eligrey/FileSaver.js" target="_blank">FileSaver.js</a>: save as a csv file.</li>
                 </ul>
             </section>
         </div>
@@ -238,7 +238,7 @@
     <section id="section-develop-history" class="contents-section">
         <div class="container">
             <br/><br/>
-            <h2>알파버젼 개발 일지 (2020.06.05, ver.0.52a)</h2>
+            <h2>알파버젼 개발 일지 (2020.06.09, ver.0.53a)</h2>
             <div style="font-size: 1.5rem;">
                 <p>아래 진척도에서 &check;항목은 구현한 것,&nbsp; -항목은 구현 예정입니다.</p>
                 <p>그 밖의 요청사항 있으시면 정재환에게 연락주세요.</p>
@@ -257,8 +257,8 @@
                         <li>&check; 다항식 regression 가능: 1차~5차 다항식. Powell method로 최적화.</li>
                         <li>&check; 다항식 interpolation 가능: Chebyshev nodes 이용.</li>
                         <li>&check; Piecewise linear interpolation 가능. (2020.06.03)</li>
-                        <li>- 기타 regression model: 요청이 있으면 추가할 예정.</li>
-                        <li>- 결과를 csv 파일로 저장: 도출한 곡선 전체를 csv 파일로 저장하여, 별도의 프로그램(엑셀, 오리진 등)에서 이용할 수 있게 함.</li>
+                        <li>&check; 결과를 clipboard로 복사.</li>
+                        <li>- 기타 regression model: 요청이 있으면 추가할 예정.</li>                        
                     </ul>
                     <li>3. 시뮬레이션 파라매터 입력</li>
                     <ul style="list-style: none;">
@@ -278,7 +278,7 @@
                         </ul>
                         <li>&check; 시뮬레이션의 결과의 오차를 예측해 출력.</li>
                         <li>&check; 최대출력/최대효율 및 해당전류 값 출력.</li>
-                        <li>- 결과를 csv 파일로 저장.</li>
+                        <li>&check; 결과를 clipboard로 복사.</li>
                     </ul>
                     <li>5. About page</li>
                     <ul style="list-style: none;">
@@ -296,6 +296,7 @@
             <div style="font-size: 1.5rem;">
                 <h3>Brief History</h3>
                 <ul>
+                    <li>June 9, 2020: Ver.0.53a release: copy to clipboard.</li>
                     <li>June 5, 2020: Ver.0.52a release: add performance report, add print style, add Google Analytics, stabilize Powell method.</li>
                     <li>June 3, 2020: Ver.0.51a release: stabilize Powell method, add piecewise linear interpolation, and minor changes.</li>
                     <li>June 2, 2020: Ver.0.5 released.</li>

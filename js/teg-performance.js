@@ -19,6 +19,9 @@ const simWindow = {
     tableSeebeck: null,
     tableElecResi: null,
     tableThrmCond: null,
+    tableCopyTepFormula: null,
+    tableCopyCurrentVsPerformance: null,
+    tableCopyTempDistribution: null,
     numPerformTableDigits: 5,
     tabledataPerformByCurrent: null,
     tablePerformByCurrent: null,
@@ -121,6 +124,8 @@ $(function(){
         }
     });
 
+    // Hide Step 2 buttons
+    $("#copy-formula").hide();
     // Hide buttons for empty charts
     $("#tep-chart-container").hide();
     $("#chart-message").html("Computing Analytic Formulae ...")
@@ -143,8 +148,13 @@ $(function(){
 function activateChartsAndButtons() {
     initTepCharts();
     initSimResultCharts();
+
     activateComputeFormulaButton();
+    activateCopyFormulaButton();
     activateRunSimButton();
+    activateCopyCurrentVsPerformanceButton();
+    activateCopyPerformReportButton();
+    activateCopyTempDistributionButton();
 
     // for test
     if(simWindow.isTestMode) {
@@ -154,6 +164,7 @@ function activateChartsAndButtons() {
 
 function activateRunSimButton() {
     function simAborted() {
+        enableAllButtons();
         console.log("Simulation aborted.")
         return;
     };
@@ -167,7 +178,7 @@ function activateRunSimButton() {
                 updateDimlessSimParams();
                 const isValidSimParams = checkValidityOfSimParams();
                 if(!isValidSimParams) {
-                    reject();
+                    reject();                    
                     return;
                 }
                 resolve();
@@ -221,6 +232,46 @@ function activateTestRunButton() {
     });
 };
 
+function activateCopyTempDistributionButton() {
+    $("#copy-temp-distribution").click(function() {
+        if(simWindow.isPerformTableDrawn) {
+            copyTempDistribution();
+        } else {
+            window.alert("Performance table not finished!");
+        }
+    });
+};
+
+function activateCopyPerformReportButton() {
+    $("#copy-perform-report").click(function() {
+        if(simWindow.isPerformTableDrawn) {
+            copyPerformReport();
+        } else {
+            window.alert("Performance table not finished!");
+        }
+    });
+};
+
+function activateCopyCurrentVsPerformanceButton() {
+    $("#copy-current-vs-performance").click(function() {
+        if(simWindow.isPerformTableDrawn) {
+            copyCurrentVsPerformance();
+        } else {
+            window.alert("Performance table not finished!");
+        }
+    });
+};
+
+function activateCopyFormulaButton() {
+    $("#copy-formula").click(function() {
+        if(simWindow.isTepFuncUpdated) {
+            copyTepFormula();
+        } else {
+            window.alert("Thermoelectric Property Formulae not determined!");
+        }
+    });
+};
+
 function activateComputeFormulaButton() {
     $("#compute-formula").click(function() {
         computeTepFormula();
@@ -241,8 +292,404 @@ function checkValidityOfSimParams() {
     //     window.alert("Hot-side temp. should be larger than cold-side temp.");        
     //     return false;
     // }
+    if((simParam.initialRefCurrent > simParam.finalRefCurrent) || (simParam.initialRefCurrent < 0)) {
+        window.alert("Wrong current range!");
+        return false;
+    }
+    if(simParam.finalRefCurrent > 1.5) {
+        window.alert("The current range is too large!");
+        return false;
+    }
 
     return true;
+};
+
+function drawCopyTempDistributionTable() {
+    const posColumnWidth = 145; // px
+    const propertyColumnWidth = 145; // px
+
+    const numSimRows = dimlessSimParam.refCurrentVec.length;
+    const dimlessSimCurrent = dimlessSimParam.refCurrentVec;
+    const simCurrent = dimlessSimCurrent.map((x) => (x*simParam.refI));
+    const dimlessPosVec = getLinearSpace(0, dimlessSimParam.length, simWindow.numMinMeshPoints);
+    const posVec = getLinearSpace(0, simParam.length, simWindow.numMinMeshPoints);
+    const dimlessChebyshevVec = getChebyshevNodes(dimlessSimParam.numSolChebyshevNodes, 0, dimlessSimParam.length);    
+
+    const tableColumns = [];
+    const tableData = [];
+    var tempFunc;
+    
+    // set columns
+    for(let i=0; i<numSimRows; i++) {
+        const subcolumn = {};
+        subcolumn.title = `Current [A]`;
+        subcolumn.columns = [
+            {
+                title:`${simCurrent[i]}`,
+                columns: [
+                    {title:"Position [mm]", field:`position${i}`, width: posColumnWidth, hozAlign:"center", headerSort: false,},
+                    {title:"Temp. [K]", field:`temp${i}`, width: propertyColumnWidth, hozAlign:"center", headerSort: false,},        
+                ],
+            },
+        ];
+        tableColumns.push(subcolumn);
+    };
+
+    // set data
+    for(let i=0; i<numSimRows; i++) {
+        tempFunc = getPolyChebyshevFuncFromChebyshevNodes(dimlessChebyshevVec, dimlessSimParam.tempVecArray[i]);
+        for(let j=0; j<simWindow.numMinMeshPoints; j++) {
+            if(tableData[j] === undefined) {
+                tableData[j] = {};
+            };
+            tableData[j][`position${i}`] = posVec[j];
+            tableData[j][`temp${i}`] = tempFunc(dimlessPosVec[j]) * simParam.refTemp;
+        };
+    };
+
+    simWindow.tableCopyTempDistribution = new Tabulator("#table-copy-temp-distribution", {
+        height: "250px",
+        data: tableData,
+        resizableColumns: false,
+        selectable: "highlight",
+        clipboard: "copy",
+        // layout: "fitColumns", //fit columns to width of table (optional)
+        columnHeaderVertAlign:"bottom", //align header contents to bottom of cell
+        columns: tableColumns,
+    });
+    $("#table-copy-temp-distribution").hide();
+};
+
+function drawCopyCurrentVsPerformanceTable() {
+    const currentColumnWidth = 145; // px
+    const propertyColumnWidth = 145; // px
+    const N = simParam.numLegs;
+
+    const tableData = [];
+    var power, hotSideHeatRate;
+
+    const numSimRows = dimlessSimParam.refCurrentVec.length;
+    const dimlessSimCurrent = dimlessSimParam.refCurrentVec;
+    const simCurrent = dimlessSimCurrent.map((x) => (x*simParam.refI));
+    for(let i=0; i<numSimRows; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        power = simParam.funcPower(dimlessSimCurrent[i]);
+        hotSideHeatRate = simParam.funcHotSideHeatRate(dimlessSimCurrent[i]);
+        tableData[i].currentSimPower = simCurrent[i];
+        tableData[i].simPower = power * N;
+        tableData[i].currentSimEfficiency = simCurrent[i];
+        tableData[i].simEfficiency = power/hotSideHeatRate;
+        tableData[i].currentSimHotSideHeatRate = simCurrent[i];
+        tableData[i].simHotSideHeatRate = hotSideHeatRate * N;
+    }
+
+    const numInterpRows = simWindow.numMinMeshPoints;
+    const dimlessInterpCurrent = getLinearSpace(dimlessSimCurrent[0], dimlessSimCurrent[numSimRows-1], numInterpRows);
+    const interpCurrent = dimlessInterpCurrent.map((x) => (x*simParam.refI));
+    for(let i=0; i<numInterpRows; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        power = simParam.funcPower(dimlessInterpCurrent[i]);
+        hotSideHeatRate = simParam.funcHotSideHeatRate(dimlessInterpCurrent[i]);
+        tableData[i].currentInterpPower = interpCurrent[i];
+        tableData[i].interpPower = power * N;
+        tableData[i].currentInterpEfficiency = interpCurrent[i];
+        tableData[i].interpEfficiency = power/hotSideHeatRate;
+        tableData[i].currentInterpHotSideHeatRate = interpCurrent[i];
+        tableData[i].interpHotSideHeatRate = hotSideHeatRate * N;
+    }
+
+    simWindow.tableCopyCurrentVsPerformance = new Tabulator("#table-copy-current-vs-performance", {
+        height: "250px",
+        data: tableData,
+        resizableColumns: false,
+        selectable: "highlight",
+        clipboard: "copy",
+        // layout: "fitColumns", //fit columns to width of table (optional)
+        columnHeaderVertAlign:"bottom", //align header contents to bottom of cell
+        columns:[ //Define Table Columns
+            {//create column group
+                title:"Power",
+                columns:[
+                    {
+                        title:"simulation",
+                        columns:[
+                            {title:"Current [A]", field:"currentSimPower", width: currentColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[W]", field:"simPower", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                    {
+                        title:"interpolation",
+                        columns:[
+                            {title:"Current [A]", field:"currentInterpPower", width: currentColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[W]", field:"interpPower", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                ],
+            },
+            {//create column group
+                title:"Efficiency",
+                columns:[
+                    {
+                        title:"simulation",
+                        columns:[
+                            {title:"Current [A]", field:"currentSimEfficiency", width: currentColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[1]", field:"simEfficiency", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                    {
+                        title:"interpolation",
+                        columns:[
+                            {title:"Current [A]", field:"currentInterpEfficiency", width: currentColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[1]", field:"interpEfficiency", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                ],
+            },
+            {//create column group
+                title:"Hot-side heat rate",
+                columns:[
+                    {
+                        title:"simulation",
+                        columns:[
+                            {title:"Current [A]", field:"currentSimHotSideHeatRate", width: currentColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[W]", field:"simHotSideHeatRate", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                    {
+                        title:"interpolation",
+                        columns:[
+                            {title:"Current [A]", field:"currentInterpHotSideHeatRate", width: currentColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[W]", field:"interpHotSideHeatRate", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                ],
+            },
+        ],
+    });
+    $("#table-copy-current-vs-performance").hide();
+
+};
+
+function drawCopyTepFormulaTable() {
+    const tempColumnWidth = 100; // px
+    const propertyColumnWidth = 145; // px
+
+    const tableData = [];
+    var xValue;
+
+    // update Seebeck coefficient
+    const [rawSeebeckDataRows, rawSeebeckMinTemp, rawSeebeckMaxTemp] = getDataRows(simWindow.tableSeebeck.getData(), "temperature", "seebeck");
+    for(let i=0; i<rawSeebeckDataRows.length; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        tableData[i].tempRawSeebeck = rawSeebeckDataRows[i][0];
+        tableData[i].rawSeebeck = rawSeebeckDataRows[i][1];
+    };
+    const formulaSeebeckTempVec = getLinearSpace(rawSeebeckMinTemp, rawSeebeckMaxTemp, simWindow.numMinMeshPoints);
+    for(let i=0; i<formulaSeebeckTempVec.length; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        tableData[i].tempFormulaSeebeck = formulaSeebeckTempVec[i];
+        tableData[i].formulaSeebeck = simParam.funcSeebeck(formulaSeebeckTempVec[i]);
+    };
+    // update Electrical resistivity
+    const [rawElecResiDataRows, rawElecResiMinTemp, rawElecResiMaxTemp] = getDataRows(simWindow.tableElecResi.getData(), "temperature", "elecResi");
+    for(let i=0; i<rawElecResiDataRows.length; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        tableData[i].tempRawElecResi = rawElecResiDataRows[i][0];
+        tableData[i].rawElecResi = rawElecResiDataRows[i][1];
+    };
+    const formulaElecResiTempVec = getLinearSpace(rawElecResiMinTemp, rawElecResiMaxTemp, simWindow.numMinMeshPoints);
+    for(let i=0; i<formulaElecResiTempVec.length; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        tableData[i].tempFormulaElecResi = formulaElecResiTempVec[i];
+        tableData[i].formulaElecResi = simParam.funcElecResi(formulaElecResiTempVec[i]);
+    };
+    // update Thermal conductivity
+    const [rawThrmCondDataRows, rawThrmCondMinTemp, rawThrmCondMaxTemp] = getDataRows(simWindow.tableThrmCond.getData(), "temperature", "thrmCond");
+    for(let i=0; i<rawThrmCondDataRows.length; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        tableData[i].tempRawThrmCond = rawThrmCondDataRows[i][0];
+        tableData[i].rawThrmCond = rawThrmCondDataRows[i][1];
+    };
+    const formulaThrmCondTempVec = getLinearSpace(rawThrmCondMinTemp, rawThrmCondMaxTemp, simWindow.numMinMeshPoints);
+    for(let i=0; i<formulaThrmCondTempVec.length; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        tableData[i].tempFormulaThrmCond = formulaThrmCondTempVec[i];
+        tableData[i].formulaThrmCond = simParam.funcThrmCond(formulaThrmCondTempVec[i]);
+    };
+    // update Electrical conductivity
+    const formulaElecCondTempVec = getLinearSpace(rawElecResiMinTemp, rawElecResiMaxTemp, simWindow.numMinMeshPoints);
+    for(let i=0; i<formulaElecCondTempVec.length; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        tableData[i].tempFormulaElecCond = formulaElecCondTempVec[i];
+        tableData[i].formulaElecCond = 1/simParam.funcElecResi(formulaElecCondTempVec[i]);
+    };
+    // update Power factor
+    const formulaPowerFactorTempVec = getLinearSpace(simParam.minTemp, simParam.maxTemp, simWindow.numMinMeshPoints);
+    for(let i=0; i<formulaPowerFactorTempVec.length; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        xValue = formulaPowerFactorTempVec[i];
+        tableData[i].tempFormulaPowerFactor = xValue;
+        tableData[i].formulaPowerFactor = Math.pow(simParam.funcSeebeck(xValue),2)/simParam.funcElecResi(xValue);
+    };
+    // update Figure of merit zT
+    const formulaFigureOfMeritTempVec = getLinearSpace(simParam.minTemp, simParam.maxTemp, simWindow.numMinMeshPoints);
+    for(let i=0; i<formulaFigureOfMeritTempVec.length; i++) {
+        if(tableData[i] === undefined) {
+            tableData[i] = {};
+        }
+        xValue = formulaFigureOfMeritTempVec[i];
+        tableData[i].tempFormulaFigureOfMerit = xValue;
+        tableData[i].formulaFigureOfMerit = Math.pow(simParam.funcSeebeck(xValue),2)/(simParam.funcElecResi(xValue)*simParam.funcThrmCond(xValue))*xValue;
+    };
+
+    simWindow.tableCopyTepFormula = new Tabulator("#tep-table-copy-formula", {
+        height: "250px",
+        data: tableData,
+        resizableColumns: false,
+        selectable: "highlight",
+        clipboard: "copy",
+        // layout: "fitColumns", //fit columns to width of table (optional)
+        columnHeaderVertAlign:"bottom", //align header contents to bottom of cell
+        columns:[ //Define Table Columns
+            {//create column group
+                title:"Seebeck coefficient",
+                columns:[
+                    {
+                        title:"raw data",
+                        columns:[
+                            {title:"Temp. [K]", field:"tempRawSeebeck", width: tempColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[V/K]", field:"rawSeebeck", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                    {
+                        title:"formula",
+                        columns:[
+                            {title:"Temp. [K]", field:"tempFormulaSeebeck", width: tempColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[V/K]", field:"formulaSeebeck", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                ],
+            },
+            {//create column group
+                title:"Electrical resistivity",
+                columns:[
+                    {
+                        title:"raw data",
+                        columns:[
+                            {title:"Temp. [K]", field:"tempRawElecResi", width: tempColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[Ω m]", field:"rawElecResi", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                    {
+                        title:"formula",
+                        columns:[
+                            {title:"Temp. [K]", field:"tempFormulaElecResi", width: tempColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[Ω m]", field:"formulaElecResi", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                ],
+            },
+            {//create column group
+                title:"Thermal conductivity",
+                columns:[
+                    {
+                        title:"raw data",
+                        columns:[
+                            {title:"Temp. [K]", field:"tempRawThrmCond", width: tempColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[W/m/K]", field:"rawThrmCond", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                    {
+                        title:"formula",
+                        columns:[
+                            {title:"Temp. [K]", field:"tempFormulaThrmCond", width: tempColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[W/m/K]", field:"formulaThrmCond", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                ],
+            },
+            {//create column group
+                title:"Electrical conductivity",
+                columns:[
+                    {
+                        title:"formula",
+                        columns:[
+                            {title:"Temp. [K]", field:"tempFormulaElecCond", width: tempColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[S/m]", field:"formulaElecCond", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                ],
+            },
+            {//create column group
+                title:"Power factor",
+                columns:[
+                    {
+                        title:"formula",
+                        columns:[
+                            {title:"Temp. [K]", field:"tempFormulaPowerFactor", width: tempColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[W/m/K\u00B2]", field:"formulaPowerFactor", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                ],
+            },
+            {//create column group
+                title:"Figure of merit zT",
+                columns:[
+                    {
+                        title:"formula",
+                        columns:[
+                            {title:"Temp. [K]", field:"tempFormulaFigureOfMerit", width: tempColumnWidth, hozAlign:"center", headerSort: false,},
+                            {title:"[1]", field:"formulaFigureOfMerit", width: propertyColumnWidth, hozAlign:"center", headerSort: false,},
+                        ],
+                    },
+                ],
+            },
+        ],
+    });
+    $("#tep-table-copy-formula").hide();
+
+};
+
+function copyTempDistribution() {
+    $("#table-copy-temp-distribution").show();
+    simWindow.tableCopyTempDistribution.copyToClipboard("active");
+    $("#table-copy-temp-distribution").hide();
+};
+
+function copyPerformReport() {
+    simWindow.tablePerformReport.copyToClipboard("active");
+};
+
+function copyCurrentVsPerformance() {
+    $("#table-copy-current-vs-performance").show();
+    simWindow.tableCopyCurrentVsPerformance.copyToClipboard("active");
+    $("#table-copy-current-vs-performance").hide();
+};
+
+function copyTepFormula() {
+    $("#tep-table-copy-formula").show();
+    simWindow.tableCopyTepFormula.copyToClipboard("active");
+    $("#tep-table-copy-formula").hide();
 };
 
 function computeTepFormula() {
@@ -268,7 +715,10 @@ function computeTepFormula() {
             $("#compute-formula").show();
 
             if(simWindow.isTepFuncUpdated) {
-                // we can go on the next step
+                // we can copy the TEPs to cilpboard
+                drawCopyTepFormulaTable();
+                $("#copy-formula").show();
+                // we can go on the next step                
                 $("#section-select-sim-param").show();
 
                 // set cold-side temp and hot-side temp
@@ -699,15 +1149,16 @@ function drawThrmCondChart() {
 };
 
 function drawElecCondChart() {
+    const [, rawElecResiMinTemp, rawElecResiMaxTemp] = getDataRows(simWindow.tableElecResi.getData(), "temperature", "elecResi");
     const xLabel = "Temperature [K]";
     const yLabel = "Electrical conductivity [S/cm]";
     const yScale = 1e-02;  // [S/cm]
-    const dx = (simParam.maxTemp - simParam.minTemp) / (simWindow.numMinMeshPoints-1);
+    const dx = (rawElecResiMaxTemp - rawElecResiMinTemp) / (simWindow.numMinMeshPoints-1);
     const dataArray = [['Temperature [K]', 'formula']]
     var xValue, yValue;
 
     for(let i=0; i<simWindow.numMinMeshPoints; i++) {
-        xValue = simParam.minTemp + dx*i;
+        xValue = rawElecResiMinTemp + dx*i;
         yValue = 1/simParam.funcElecResi(xValue);
         dataArray.push([xValue, yValue * yScale]);
     };
@@ -727,7 +1178,7 @@ function drawElecCondChart() {
 
 function drawPowerFactorChart() {
     const xLabel = "Temperature [K]";
-    const yLabel = "Power Factor [10\u207b\u00B3 W/m/K\u00B2]"; // [10^{-3} W/m/K^2]
+    const yLabel = "Power factor [10\u207b\u00B3 W/m/K\u00B2]"; // [10^{-3} W/m/K^2]
     const yScale = 1e03;  // [10^{-3} W/m/K^2]
     const dx = (simParam.maxTemp - simParam.minTemp) / (simWindow.numMinMeshPoints-1);
     const dataArray = [['Temperature [K]', 'formula']]
@@ -1565,6 +2016,9 @@ async function runSimulation() {
 
     disableAllButtons();
     $("#report-list").show();
+    $("#copy-current-vs-performance").hide();
+    $("#copy-perform-report").hide();
+    $("#copy-temp-distribution").hide();
     $(".table-performance").hide();
     resetBeforeRunSimulation();
 
@@ -1722,11 +2176,11 @@ async function runSimulation() {
             }
         }
         // find max. power
+        const initialJForOptimization = (initialRefCurrent + finalRefCurrent)/2;
         if(!isPostProcessingFailed) {
-            const JAtMaxPower = await minimizer.powellsMethod((J)=>(-simParam.funcPower(J)), [0.5], 
+            const JAtMaxPower = await minimizer.powellsMethod((J)=>(-simParam.funcPower(J)), [initialJForOptimization], 
                 {'bounds': [[initialRefCurrent, finalRefCurrent]], 'maxIter': dimlessSimParam.numMaxIteration,
                  'absTolerance': dimlessSimParam.solverTol, 'tolerance': 1e-8, 'lineTolerance': 1e-8, 'verbose': true, });
-            console.log("JAtMaxPower=", JAtMaxPower);
             const resAtMaxPower = await solveTeqn(JAtMaxPower);
             if(resAtMaxPower.success) {
                 simWindow.performAtMaxPower = getTegPerformance(chebyshevXVec, resAtMaxPower.sol, JAtMaxPower);
@@ -1736,10 +2190,9 @@ async function runSimulation() {
         }
         // find max. efficiency
         if(!isPostProcessingFailed) {
-            const JAtMaxEfficiency = await minimizer.powellsMethod((J)=>(-simParam.funcPower(J)/simParam.funcHotSideHeatRate(J)), [0.5], 
+            const JAtMaxEfficiency = await minimizer.powellsMethod((J)=>(-simParam.funcPower(J)/simParam.funcHotSideHeatRate(J)), [initialJForOptimization], 
                 {'bounds': [[initialRefCurrent, finalRefCurrent]], 'maxIter': dimlessSimParam.numMaxIteration,
                 'absTolerance': dimlessSimParam.solverTol, 'tolerance': 1e-8, 'lineTolerance': 1e-8, 'verbose': true, });
-            console.log("JAtMaxEfficiency=", JAtMaxEfficiency);
             const resAtMaxEfficiency = await solveTeqn(JAtMaxEfficiency);
             if(resAtMaxEfficiency.success) {
                 simWindow.performAtMaxEfficiency = getTegPerformance(chebyshevXVec, resAtMaxEfficiency.sol, JAtMaxEfficiency);
@@ -1750,8 +2203,13 @@ async function runSimulation() {
         
         if(!isPostProcessingFailed) {
             $("#report-list").hide();
-            $(".table-performance").show();
+            drawCopyCurrentVsPerformanceTable();
+            drawCopyTempDistributionTable();
             drawPerformTables();
+            $("#copy-current-vs-performance").show();
+            $("#copy-perform-report").show();
+            $("#copy-temp-distribution").show();        
+            $(".table-performance").show();
             simWindow.isPerformTableDrawn = true;
         }
 

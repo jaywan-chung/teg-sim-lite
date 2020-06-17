@@ -178,6 +178,10 @@ h3 {
     .apps .text p {
         display: none;
     }
+    .members .container article {
+        flex: 0 0 100%;
+        margin: 5px;
+    }
 }
 
 .v-margin {

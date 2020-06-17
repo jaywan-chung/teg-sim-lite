@@ -178,6 +178,8 @@ h3 {
     .apps .text p {
         display: none;
     }
+}
+@media only screen and (max-width: 600px) {
     .members .container article {
         flex: 0 0 100%;
         margin: 5px;

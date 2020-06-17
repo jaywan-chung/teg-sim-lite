@@ -54,6 +54,16 @@
     margin: 10px;
 }
 
+.paragraph a{
+    color: var(--main-color);
+    color: black;
+    text-decoration-line: none;
+}
+.paragraph a:hover {
+    color: var(--main-color);
+    background-color: var(--accent-color);
+}
+
 .subtitle {
     display: flex;
     flex-wrap: wrap;

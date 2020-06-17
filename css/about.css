@@ -126,8 +126,8 @@ h3 {
     margin-right: 20px;
 }
 .members .container article {
-    flex: 0 0 30%;
-    margin: 10px;
+    flex: 0 0 32%;
+    margin: 5px;
 }
 .members a {
     display: block;
@@ -178,6 +178,11 @@ h3 {
     .apps .text p {
         display: none;
     }
+}
+
+.v-margin {
+    margin-top: 7px;
+    margin-bottom: 7px;
 }
 
 /* contact section style */
